@@ -1,0 +1,46 @@
+plugins {
+    id 'java'
+}
+
+group 'net.example'
+version '1.0-SNAPSHOT'
+
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation files('microemulator-2.0.4/microemulator.jar')
+}
+
+jar {
+    manifest {
+        attributes(
+                'MIDlet-Vendor': 'pixtaded',
+                'MIDlet-Version': '1.0',
+                'MicroEdition-Configuration': 'CLDC 1.0',
+                'MIDlet-Name': 'Hello',
+                'MIDlet-Description': 'Test MIDlet',
+                'MicroEdition-Profile': 'MicroEdition-Profile',
+                'MIDlet-1': 'Hello,/icon.png,Hello'
+        )
+    }
+}
+
+task runEmulator(dependsOn:jar) {
+    doLast {
+        javaexec {
+            main = "-jar"
+            args = [
+                    "./microemulator-2.0.4/microemulator.jar",
+                     jar.getArchiveFile().get().asFile.getAbsolutePath()
+            ]
+        }
+    }
+}
+
+java {
+    sourceCompatibility = "1.2"
+    targetCompatibility = "1.1"
+}
