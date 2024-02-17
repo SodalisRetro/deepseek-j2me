@@ -12,13 +12,13 @@ dependencies {
 jar {
     manifest {
         attributes(
-                'MIDlet-Vendor': 'pixtaded',
-                'MIDlet-Version': '1.0',
-                'MicroEdition-Configuration': 'CLDC 1.0',
-                'MIDlet-Name': 'Hello',
-                'MIDlet-Description': 'Test MIDlet',
+                'MIDlet-Vendor': MIDletVendor,
+                'MIDlet-Version': MIDletVersion,
+                'MicroEdition-Configuration': MicroEditionConfiguration,
+                'MIDlet-Name': MIDletName,
+                'MIDlet-Description': MIDletDescription,
                 'MicroEdition-Profile': 'MicroEdition-Profile',
-                'MIDlet-1': 'Hello,/icon.png,Hello'
+                'MIDlet-1': MIDletName + ',' + icon + ',' + mainClass
         )
     }
 }

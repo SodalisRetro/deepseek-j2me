@@ -1,3 +1,5 @@
+package net.example;
+
 import javax.microedition.midlet.MIDlet;
 import javax.microedition.lcdui.TextBox;
 import javax.microedition.lcdui.Display;
