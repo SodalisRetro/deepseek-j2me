@@ -33,6 +33,10 @@ public class I18n {
     public static final String SETTINGS_SAVED  = "settings.saved";
     public static final String CHAT_SYSTEM     = "chat.system";
 
+    public static final String CMD_SEARCH = "cmd.search";
+    public static final String SEARCH_ENABLED  = "search.enabled";
+    public static final String SEARCH_DISABLED = "search.disabled";
+
     private static Hashtable strings;
 
     static {
@@ -50,7 +54,7 @@ public class I18n {
     }
 
     private static Hashtable en() {
-        Hashtable h = new Hashtable(25);
+        Hashtable h = new Hashtable(26);
         h.put(TITLE_IDLE,      "DeepSeek AI  [Idle]");
         h.put(TITLE_THINKING,  "DeepSeek AI  [Thinking...]");
         h.put(TITLE_ERROR,     "DeepSeek AI  [Error]");
@@ -79,11 +83,15 @@ public class I18n {
         h.put(SETTINGS_PORT,  "Port");
         h.put(SETTINGS_SAVED, "Settings saved.");
         h.put(CHAT_SYSTEM,    "System");
+
+        h.put(CMD_SEARCH, "Web Search");
+        h.put(SEARCH_ENABLED,  "Web search enabled");
+        h.put(SEARCH_DISABLED, "Web search disabled");
         return h;
     }
 
     private static Hashtable zhCN() {
-        Hashtable h = new Hashtable(25);
+        Hashtable h = new Hashtable(26);
         h.put(TITLE_IDLE,      "DeepSeek AI  [就绪]");
         h.put(TITLE_THINKING,  "DeepSeek AI  [思考...]");
         h.put(TITLE_ERROR,     "DeepSeek AI  [错误]");
@@ -112,6 +120,10 @@ public class I18n {
         h.put(SETTINGS_PORT,  "端口");
         h.put(SETTINGS_SAVED, "设置已保存。");
         h.put(CHAT_SYSTEM,    "系统");
+
+        h.put(CMD_SEARCH, "联网搜索");
+        h.put(SEARCH_ENABLED,  "已开启联网搜索");
+        h.put(SEARCH_DISABLED, "已关闭联网搜索");
         return h;
     }
 }

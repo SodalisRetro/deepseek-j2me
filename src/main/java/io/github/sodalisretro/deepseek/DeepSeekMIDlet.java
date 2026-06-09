@@ -20,7 +20,6 @@ public class DeepSeekMIDlet extends MIDlet implements CommandListener, Runnable 
     private Form chatForm;
     private Form settingsForm;
     private TextBox inputBox;
-    private StringItem chatLogItem;
     private TextField hostField;
     private TextField portField;
     private Command sendCommand;
@@ -32,43 +31,51 @@ public class DeepSeekMIDlet extends MIDlet implements CommandListener, Runnable 
     private Command nextCommand;
     private Command saveCommand;
     private Command settingsBackCommand;
+    private Command searchCommand;
 
     private HttpClient httpClient;
     private Vector messages;
-    private StringBuffer chatLog;
     private Vector inputHistory;
     private int historyPos;
 
     private String currentUserMessage;
     private boolean running;
+    private boolean webSearch;
     private static final int MAX_HISTORY = 10;
-    private static final int MAX_LOG_CHARS = 4000;
+    private static final int MAX_FORM_ITEMS = 30;
     private static final int MAX_INPUT_HISTORY = 20;
 
     public DeepSeekMIDlet() {
         System.out.println("[MIDlet] constructor start");
         display = Display.getDisplay(this);
         messages = new Vector();
-        chatLog = new StringBuffer();
-        chatLog.append(I18n.get(I18n.CHAT_HINT));
         inputHistory = new Vector();
         historyPos = -1;
         running = false;
+        webSearch = Settings.getWebSearch();
 
         httpClient = new HttpClient(Settings.getProxyUrl());
 
         chatForm = new Form(I18n.get(I18n.TITLE_IDLE));
 
-        chatLogItem = new StringItem(null, I18n.get(I18n.CHAT_HINT));
-        chatLogItem.setLayout(Item.LAYOUT_2);
-        chatForm.append(chatLogItem);
+        StringBuffer header = new StringBuffer();
+        if (webSearch) {
+            header.append(I18n.get(I18n.CHAT_SYSTEM));
+            header.append(": ");
+            header.append(I18n.get(I18n.SEARCH_ENABLED));
+            header.append('\n');
+        }
+        header.append(I18n.get(I18n.CHAT_HINT));
+        appendFormItem(header.toString());
 
         sendCommand = new Command(I18n.get(I18n.CMD_SEND), Command.OK, 1);
         exitCommand = new Command(I18n.get(I18n.CMD_EXIT), Command.EXIT, 2);
         settingsCommand = new Command(I18n.get(I18n.CMD_SETTINGS), Command.HELP, 3);
+        searchCommand = new Command(I18n.get(I18n.CMD_SEARCH), Command.HELP, 3);
         chatForm.addCommand(sendCommand);
         chatForm.addCommand(exitCommand);
         chatForm.addCommand(settingsCommand);
+        chatForm.addCommand(searchCommand);
         chatForm.setCommandListener(this);
 
         inputBox = new TextBox(I18n.get(I18n.INPUT_TITLE), "", 1000, TextField.ANY);
@@ -148,6 +155,12 @@ public class DeepSeekMIDlet extends MIDlet implements CommandListener, Runnable 
                 hostField.setString(Settings.getHost());
                 portField.setString(Settings.getPort());
                 display.setCurrent(settingsForm);
+            } else if (c == searchCommand) {
+                webSearch = !webSearch;
+                Settings.saveWebSearch(webSearch);
+                String status = I18n.get(I18n.CHAT_SYSTEM) + ": " +
+                    (webSearch ? I18n.get(I18n.SEARCH_ENABLED) : I18n.get(I18n.SEARCH_DISABLED));
+                appendFormItem("\n" + status);
             } else if (c == exitCommand) {
                 notifyDestroyed();
             }
@@ -273,21 +286,17 @@ public class DeepSeekMIDlet extends MIDlet implements CommandListener, Runnable 
     }
 
     private void appendChat(String role, String text) {
-        chatLog.append('\n');
-        chatLog.append(role);
-        chatLog.append(": ");
-        chatLog.append(text);
+        appendFormItem("\n" + role + ": " + text);
+    }
 
-        if (chatLog.length() > MAX_LOG_CHARS) {
-            int cut = chatLog.length() - MAX_LOG_CHARS;
-            int nl = chatLog.toString().indexOf('\n', cut);
-            int hintLen = I18n.get(I18n.CHAT_HINT).length();
-            if (nl > hintLen && nl < chatLog.length()) {
-                chatLog.delete(hintLen + 1, nl + 1);
-            }
+    private void appendFormItem(String text) {
+        while (chatForm.size() > 0 && chatForm.size() >= MAX_FORM_ITEMS) {
+            chatForm.delete(chatForm.size() - 1);
         }
 
-        chatLogItem.setText(chatLog.toString());
+        StringItem item = new StringItem(null, text);
+        item.setLayout(Item.LAYOUT_2);
+        chatForm.insert(0, item);
     }
 
     private String buildRequestBody(String userMessage) {
@@ -307,7 +316,13 @@ public class DeepSeekMIDlet extends MIDlet implements CommandListener, Runnable 
         sb.append(escapeJson(userMessage));
         sb.append("\"}");
 
-        sb.append("],\"stream\":false}");
+        sb.append("],\"stream\":false");
+
+        if (webSearch) {
+            sb.append(",\"web_search\":true");
+        }
+
+        sb.append("}");
         return sb.toString();
     }
 

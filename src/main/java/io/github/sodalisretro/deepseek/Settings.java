@@ -2,57 +2,46 @@ package io.github.sodalisretro.deepseek;
 
 import javax.microedition.rms.RecordStore;
 import javax.microedition.rms.RecordStoreException;
-import javax.microedition.rms.RecordStoreNotOpenException;
 
 public class Settings {
 
-    private static final String STORE_NAME = "ds_settings";
-    private static final int REC_HOST = 1;
-    private static final int REC_PORT = 2;
+    private static final String STORE_NAME = "ds_cfg";
+    private static final int RECORD_ID = 1;
 
     private static final String DEFAULT_HOST = "localhost";
     private static final String DEFAULT_PORT = "8080";
 
-    private static String cachedHost;
-    private static String cachedPort;
-    private static boolean loaded;
+    private static String host;
+    private static String port;
+    private static boolean webSearch;
 
-    public static String getHost() {
-        ensureLoaded();
-        return cachedHost;
-    }
-
-    public static String getPort() {
-        ensureLoaded();
-        return cachedPort;
-    }
-
-    public static String getProxyUrl() {
-        return "http://" + getHost() + ":" + getPort() + "/";
-    }
-
-    public static void save(String host, String port) {
+    static {
         RecordStore rs = null;
         try {
             rs = RecordStore.openRecordStore(STORE_NAME, true);
-            byte[] hostBytes = host.getBytes();
-            byte[] portBytes = port.getBytes();
+            if (rs.getNumRecords() >= RECORD_ID) {
+                byte[] data = rs.getRecord(RECORD_ID);
+                String raw = new String(data);
+                int i = 0;
+                int j;
+                j = raw.indexOf('\n', i);
+                host = (j >= 0) ? raw.substring(i, j) : DEFAULT_HOST;
+                i = j + 1;
 
-            if (rs.getNumRecords() >= REC_HOST) {
-                rs.setRecord(REC_HOST, hostBytes, 0, hostBytes.length);
+                j = raw.indexOf('\n', i);
+                port = (j >= 0) ? raw.substring(i, j) : DEFAULT_PORT;
+                i = j + 1;
+
+                webSearch = (i < raw.length() && raw.charAt(i) == '1');
             } else {
-                rs.addRecord(hostBytes, 0, hostBytes.length);
+                host = DEFAULT_HOST;
+                port = DEFAULT_PORT;
+                webSearch = false;
             }
-
-            if (rs.getNumRecords() >= REC_PORT) {
-                rs.setRecord(REC_PORT, portBytes, 0, portBytes.length);
-            } else {
-                rs.addRecord(portBytes, 0, portBytes.length);
-            }
-
-            cachedHost = host;
-            cachedPort = port;
-        } catch (RecordStoreException e) {
+        } catch (Exception e) {
+            host = DEFAULT_HOST;
+            port = DEFAULT_PORT;
+            webSearch = false;
         } finally {
             if (rs != null) {
                 try { rs.closeRecordStore(); } catch (RecordStoreException ignored) {}
@@ -60,29 +49,37 @@ public class Settings {
         }
     }
 
-    private static void ensureLoaded() {
-        if (loaded) {
-            return;
-        }
-        loaded = true;
+    public static String getHost() { return host; }
+
+    public static String getPort() { return port; }
+
+    public static String getProxyUrl() { return "http://" + host + ":" + port + "/"; }
+
+    public static boolean getWebSearch() { return webSearch; }
+
+    public static void save(String newHost, String newPort) {
+        host = newHost;
+        port = newPort;
+        persist();
+    }
+
+    public static void saveWebSearch(boolean enable) {
+        webSearch = enable;
+        persist();
+    }
+
+    private static void persist() {
         RecordStore rs = null;
         try {
+            String raw = host + "\n" + port + "\n" + (webSearch ? "1" : "0");
+            byte[] data = raw.getBytes();
             rs = RecordStore.openRecordStore(STORE_NAME, true);
-            if (rs.getNumRecords() >= REC_HOST) {
-                byte[] data = rs.getRecord(REC_HOST);
-                cachedHost = new String(data);
+            if (rs.getNumRecords() >= RECORD_ID) {
+                rs.setRecord(RECORD_ID, data, 0, data.length);
             } else {
-                cachedHost = DEFAULT_HOST;
-            }
-            if (rs.getNumRecords() >= REC_PORT) {
-                byte[] data = rs.getRecord(REC_PORT);
-                cachedPort = new String(data);
-            } else {
-                cachedPort = DEFAULT_PORT;
+                rs.addRecord(data, 0, data.length);
             }
         } catch (RecordStoreException e) {
-            cachedHost = DEFAULT_HOST;
-            cachedPort = DEFAULT_PORT;
         } finally {
             if (rs != null) {
                 try { rs.closeRecordStore(); } catch (RecordStoreException ignored) {}
