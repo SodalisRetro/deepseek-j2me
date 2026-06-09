@@ -13,7 +13,10 @@ public class HttpClient {
 
     public HttpClient(String proxyUrl) {
         this.proxyUrl = proxyUrl;
-        System.out.println("[HttpClient] proxy=" + proxyUrl);
+    }
+
+    public void setProxyUrl(String proxyUrl) {
+        this.proxyUrl = proxyUrl;
     }
 
     public String post(String jsonBody) throws IOException {
