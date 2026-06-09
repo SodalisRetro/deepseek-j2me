@@ -17,19 +17,42 @@ jar {
                 'MicroEdition-Configuration': MicroEditionConfiguration,
                 'MIDlet-Name': MIDletName,
                 'MIDlet-Description': MIDletDescription,
-                'MicroEdition-Profile': 'MicroEdition-Profile',
+                'MicroEdition-Profile': MicroEditionProfile,
                 'MIDlet-1': MIDletName + ',' + icon + ',' + mainClass
         )
     }
 }
 
-task runEmulator(dependsOn:jar) {
+tasks.register('generateJad') {
+    dependsOn jar
+    doLast {
+        def jarFile = jar.getArchiveFile().get().asFile
+        def jadFile = new File(jarFile.parentFile, jarFile.name.replace('.jar', '.jad'))
+
+        def jadProperties = [
+                'MIDlet-Name'                : MIDletName,
+                'MIDlet-Version'             : MIDletVersion,
+                'MIDlet-Vendor'              : MIDletVendor,
+                'MIDlet-1'                   : "${MIDletName}, ${icon}, ${mainClass}",
+                'MicroEdition-Configuration' : MicroEditionConfiguration,
+                'MicroEdition-Profile'       : MicroEditionProfile,
+                'MIDlet-Description'         : MIDletDescription,
+                'MIDlet-Jar-URL'             : jarFile.name,
+                'MIDlet-Jar-Size'            : jarFile.length()
+        ]
+
+        jadFile.text = jadProperties.collect { key, value -> "${key}: ${value}" }.join('\n') + '\n'
+    }
+}
+
+tasks.register('runEmulator') {
+    dependsOn jar
     doLast {
         javaexec {
-            main = "-jar"
+            mainClass = 'org.microemu.app.Main'
+            classpath = files("./microemulator-2.0.4/microemulator.jar")
             args = [
-                    "./microemulator-2.0.4/microemulator.jar",
-                     jar.getArchiveFile().get().asFile.getAbsolutePath()
+                    jar.getArchiveFile().get().asFile.getAbsolutePath()
             ]
         }
     }
@@ -39,3 +62,6 @@ java {
     sourceCompatibility = "1.2"
     targetCompatibility = "1.1"
 }
+
+// Auto-generate .jad after jar built
+build.dependsOn generateJad
