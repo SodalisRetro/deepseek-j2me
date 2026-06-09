@@ -1,4 +1,4 @@
-package net.example;
+package io.github.sodalisretro.example;
 
 import javax.microedition.midlet.MIDlet;
 import javax.microedition.lcdui.TextBox;
