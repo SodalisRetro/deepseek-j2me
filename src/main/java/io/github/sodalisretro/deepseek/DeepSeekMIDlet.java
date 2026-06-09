@@ -8,7 +8,9 @@ import javax.microedition.lcdui.CommandListener;
 import javax.microedition.lcdui.Display;
 import javax.microedition.lcdui.Displayable;
 import javax.microedition.lcdui.Form;
+import javax.microedition.lcdui.Item;
 import javax.microedition.lcdui.StringItem;
+import javax.microedition.lcdui.TextBox;
 import javax.microedition.lcdui.TextField;
 import javax.microedition.midlet.MIDlet;
 
@@ -16,43 +18,51 @@ public class DeepSeekMIDlet extends MIDlet implements CommandListener, Runnable 
 
     private Display display;
     private Form chatForm;
-    private TextField inputField;
-    private StringItem statusItem;
+    private TextBox inputBox;
+    private StringItem chatLogItem;
     private Command sendCommand;
     private Command exitCommand;
+    private Command okCommand;
+    private Command backCommand;
 
     private HttpClient httpClient;
     private Vector messages;
+    private StringBuffer chatLog;
 
     private String currentUserMessage;
     private boolean running;
     private static final int MAX_HISTORY = 10;
+    private static final int MAX_LOG_CHARS = 4000;
     private static final String PROXY_URL = "http://localhost:8080/";
+    private static final String HINT = "--- Press Send to send message ---";
 
     public DeepSeekMIDlet() {
         System.out.println("[MIDlet] constructor start");
         display = Display.getDisplay(this);
         httpClient = new HttpClient(PROXY_URL);
         messages = new Vector();
+        chatLog = new StringBuffer();
+        chatLog.append(HINT);
         running = false;
 
-        chatForm = new Form("DeepSeek Chat");
+        chatForm = new Form("DeepSeek AI  [Idle]");
 
-        StringItem header = new StringItem(null, "< DeepSeek AI >\n");
-        header.setLayout(StringItem.LAYOUT_CENTER);
-        chatForm.append(header);
-
-        statusItem = new StringItem(null, "Input question, press Send\n________________________\n");
-        chatForm.append(statusItem);
-
-        inputField = new TextField("> ", "", 500, TextField.ANY);
-        chatForm.append(inputField);
+        chatLogItem = new StringItem(null, HINT);
+        chatLogItem.setLayout(Item.LAYOUT_2);
+        chatForm.append(chatLogItem);
 
         sendCommand = new Command("Send", Command.OK, 1);
         exitCommand = new Command("Exit", Command.EXIT, 2);
         chatForm.addCommand(sendCommand);
         chatForm.addCommand(exitCommand);
         chatForm.setCommandListener(this);
+
+        inputBox = new TextBox("Message", "", 1000, TextField.ANY);
+        okCommand = new Command("OK", Command.OK, 1);
+        backCommand = new Command("Back", Command.BACK, 2);
+        inputBox.addCommand(okCommand);
+        inputBox.addCommand(backCommand);
+        inputBox.setCommandListener(this);
 
         display.setCurrent(chatForm);
         System.out.println("[MIDlet] constructor done");
@@ -65,61 +75,60 @@ public class DeepSeekMIDlet extends MIDlet implements CommandListener, Runnable 
     public void destroyApp(boolean unconditional) {}
 
     public void commandAction(Command c, Displayable d) {
-        System.out.println("[MIDlet] commandAction type=" + c.getCommandType() + " label=" + c.getLabel());
-        if (c == sendCommand) {
-            if (running) {
-                System.out.println("[MIDlet] blocked: already running");
-                return;
+        if (d == inputBox) {
+            if (c == okCommand) {
+                String text = inputBox.getString();
+                if (text != null && text.length() > 0) {
+                    inputBox.setString("");
+                    display.setCurrent(chatForm);
+                    sendMessage(text);
+                }
+            } else if (c == backCommand) {
+                inputBox.setString("");
+                display.setCurrent(chatForm);
             }
-            String text = inputField.getString();
-            System.out.println("[MIDlet] input: '" + text + "'");
-            if (text == null || text.length() == 0) {
-                System.out.println("[MIDlet] empty input, ignoring");
-                return;
+        } else if (d == chatForm) {
+            if (c == sendCommand) {
+                if (running) {
+                    return;
+                }
+                display.setCurrent(inputBox);
+            } else if (c == exitCommand) {
+                notifyDestroyed();
             }
-            currentUserMessage = text;
-            inputField.setString("");
-            showChat("You", currentUserMessage);
-            addHistoryMessage("user", currentUserMessage);
-            statusItem.setText("Thinking...");
-            running = true;
-            System.out.println("[MIDlet] starting thread");
-            new Thread(this).start();
-        } else if (c == exitCommand) {
-            notifyDestroyed();
         }
     }
 
+    private void sendMessage(String text) {
+        currentUserMessage = text;
+        appendChat("You", currentUserMessage);
+        addHistoryMessage("user", currentUserMessage);
+        chatForm.setTitle("DeepSeek AI  [Thinking...]");
+        running = true;
+        new Thread(this).start();
+    }
+
     public void run() {
-        System.out.println("[MIDlet] run() started");
         String response = null;
         try {
             String requestBody = buildRequestBody(currentUserMessage);
-            System.out.println("[MIDlet] request body: " + requestBody);
             response = httpClient.post(requestBody);
-            System.out.println("[MIDlet] post() returned: '" + response + "'");
         } catch (IOException e) {
-            System.out.println("[MIDlet] IOException: " + e.toString());
             String errMsg = e.getMessage();
             if (errMsg == null) {
                 errMsg = e.toString();
             }
             response = "{\"error\":{\"message\":\"" + escapeJson(errMsg) + "\"}}";
-            System.out.println("[MIDlet] error response: " + response);
         } catch (Exception e) {
-            System.out.println("[MIDlet] Exception: " + e.toString());
             String errMsg = e.getMessage();
             if (errMsg == null) {
                 errMsg = e.toString();
             }
             response = "{\"error\":{\"message\":\"" + escapeJson(errMsg) + "\"}}";
-            System.out.println("[MIDlet] error response: " + response);
         }
         final String finalResponse = response;
-        System.out.println("[MIDlet] finalResponse='" + finalResponse + "', calling callSerially");
         display.callSerially(new Runnable() {
             public void run() {
-                System.out.println("[MIDlet] callSerially callback, handling response");
                 handleResponse(finalResponse);
                 running = false;
             }
@@ -127,46 +136,35 @@ public class DeepSeekMIDlet extends MIDlet implements CommandListener, Runnable 
     }
 
     private void handleResponse(String response) {
-        System.out.println("[MIDlet] handleResponse, response is " + (response == null ? "NULL" : "len=" + response.length()));
         if (response == null) {
-            System.out.println("[MIDlet] response is null, showing error");
-            showChat("Error", "No response (proxy not running?)");
-            statusItem.setText("Error: no response");
+            appendChat("Error", "No response (proxy not running?)");
+            chatForm.setTitle("DeepSeek AI  [Error]");
             return;
         }
         try {
-            System.out.println("[MIDlet] parsing JSON: '" + response + "'");
             Object parsed = JsonParser.parse(response);
-            System.out.println("[MIDlet] parsed type: " + (parsed == null ? "null" : parsed.getClass().getName()));
             if (parsed instanceof Hashtable) {
                 Hashtable root = (Hashtable) parsed;
-                System.out.println("[MIDlet] root keys: " + root.keys());
                 Object error = root.get("error");
                 if (error instanceof Hashtable) {
                     String errMsg = (String) ((Hashtable) error).get("message");
-                    System.out.println("[MIDlet] API error: " + errMsg);
-                    showChat("Error", errMsg != null ? errMsg : "Unknown error");
-                    statusItem.setText("Error occurred.");
+                    appendChat("Error", errMsg != null ? errMsg : "Unknown error");
+                    chatForm.setTitle("DeepSeek AI  [Error]");
                     return;
                 }
                 Object choices = root.get("choices");
-                System.out.println("[MIDlet] choices=" + (choices == null ? "null" : choices.getClass().getName()));
                 if (choices instanceof Vector) {
                     Vector choiceList = (Vector) choices;
-                    System.out.println("[MIDlet] choiceList size=" + choiceList.size());
                     if (choiceList.size() > 0) {
                         Object choice = choiceList.elementAt(0);
-                        System.out.println("[MIDlet] choice type=" + (choice == null ? "null" : choice.getClass().getName()));
                         if (choice instanceof Hashtable) {
                             Object message = ((Hashtable) choice).get("message");
-                            System.out.println("[MIDlet] message type=" + (message == null ? "null" : message.getClass().getName()));
                             if (message instanceof Hashtable) {
                                 String content = (String) ((Hashtable) message).get("content");
-                                System.out.println("[MIDlet] content=" + (content == null ? "null" : "'" + content + "'"));
                                 if (content != null) {
-                                    showChat("DeepSeek", content);
+                                    appendChat("DeepSeek", content);
                                     addHistoryMessage("assistant", content);
-                                    statusItem.setText("________________________");
+                                    chatForm.setTitle("DeepSeek AI  [Idle]");
                                     return;
                                 }
                             }
@@ -174,28 +172,29 @@ public class DeepSeekMIDlet extends MIDlet implements CommandListener, Runnable 
                     }
                 }
             }
-            System.out.println("[MIDlet] response parse failed");
-            showChat("Error", "Failed to parse response");
-            statusItem.setText("Parse error.");
+            appendChat("Error", "Failed to parse response");
+            chatForm.setTitle("DeepSeek AI  [Parse error]");
         } catch (Exception e) {
-            System.out.println("[MIDlet] handleResponse Exception: " + e.toString());
-            e.printStackTrace();
-            showChat("Error", e.toString());
-            statusItem.setText("Error: " + e.getMessage());
+            appendChat("Error", e.toString());
+            chatForm.setTitle("DeepSeek AI  [Error]");
         }
     }
 
-    private void showChat(String role, String text) {
-        System.out.println("[MIDlet] showChat " + role + ": " + text);
-        if (messages.size() / 2 >= MAX_HISTORY) {
-            chatForm.delete(2);
-            chatForm.delete(2);
-            messages.removeElementAt(0);
-            messages.removeElementAt(0);
+    private void appendChat(String role, String text) {
+        chatLog.append('\n');
+        chatLog.append(role);
+        chatLog.append(": ");
+        chatLog.append(text);
+
+        if (chatLog.length() > MAX_LOG_CHARS) {
+            int cut = chatLog.length() - MAX_LOG_CHARS;
+            int nl = chatLog.toString().indexOf('\n', cut);
+            if (nl > HINT.length() && nl < chatLog.length()) {
+                chatLog.delete(HINT.length() + 1, nl + 1);
+            }
         }
-        String label = role + ": ";
-        StringItem msg = new StringItem(label, text + "\n");
-        chatForm.insert(chatForm.size() - 1, msg);
+
+        chatLogItem.setText(chatLog.toString());
     }
 
     private String buildRequestBody(String userMessage) {
