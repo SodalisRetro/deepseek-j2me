@@ -152,9 +152,11 @@ function handleRequest(body, res) {
             'Extract the answer from the HTML, do not quote it.\n' +
             '\n' +
             '=== OUTPUT FORMAT (J2ME display constraint) ===\n' +
-            'Output plain text only. Do NOT use Markdown formatting: ' +
+            'Output plain text only. Do NOT use ANY Markdown formatting: ' +
             'no **bold**, no `code`, no bullet lists with -, no > quotes, ' +
-            'no # headings. Use plain paragraphs and numbered lists if needed. ' +
+            'no # headings, and especially NO PIPE TABLES with | and ---. ' +
+            'Instead, present structured data as labeled lines (title: value) ' +
+            'or flat paragraphs. Use plain numbered lists (1. 2. 3.) if needed. ' +
             'Keep responses concise.';
 
         messages.unshift({
