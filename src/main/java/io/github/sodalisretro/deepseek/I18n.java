@@ -33,9 +33,9 @@ public class I18n {
     public static final String SETTINGS_SAVED  = "settings.saved";
     public static final String CHAT_SYSTEM     = "chat.system";
 
-    public static final String CMD_SEARCH = "cmd.search";
-    public static final String SEARCH_ENABLED  = "search.enabled";
-    public static final String SEARCH_DISABLED = "search.disabled";
+    public static final String SETTINGS_SEARCH = "settings.search";
+    public static final String SETTINGS_YES    = "settings.yes";
+    public static final String SETTINGS_NO     = "settings.no";
 
     private static Hashtable strings;
 
@@ -74,7 +74,7 @@ public class I18n {
         h.put(ERR_UNKNOWN,     "Unknown error");
         h.put(ERR_PARSE_FAIL,  "Failed to parse response");
         h.put(INPUT_TITLE,     "Message");
-        h.put(SYSTEM_PROMPT,   "You are a helpful assistant. Keep responses concise.");
+        h.put(SYSTEM_PROMPT,   "You are a helpful assistant. Keep responses concise. Output plain text only. Do NOT use Markdown formatting (no **bold**, no `code`, no bullet lists with -, no > quotes, no # headings). Use plain paragraphs and numbered lists if needed.");
 
         h.put(CMD_SETTINGS,   "Settings");
         h.put(CMD_SAVE,       "Save");
@@ -84,9 +84,9 @@ public class I18n {
         h.put(SETTINGS_SAVED, "Settings saved.");
         h.put(CHAT_SYSTEM,    "System");
 
-        h.put(CMD_SEARCH, "Web Search");
-        h.put(SEARCH_ENABLED,  "Web search enabled");
-        h.put(SEARCH_DISABLED, "Web search disabled");
+        h.put(SETTINGS_SEARCH, "Web Search");
+        h.put(SETTINGS_YES,    "Yes");
+        h.put(SETTINGS_NO,     "No");
         return h;
     }
 
@@ -111,7 +111,7 @@ public class I18n {
         h.put(ERR_UNKNOWN,     "未知错误");
         h.put(ERR_PARSE_FAIL,  "解析响应失败");
         h.put(INPUT_TITLE,     "输入消息");
-        h.put(SYSTEM_PROMPT,   "You are a helpful assistant. Answer in Chinese when appropriate. Keep responses concise.");
+        h.put(SYSTEM_PROMPT,   "You are a helpful assistant. Keep responses concise. Output plain text only. Do NOT use Markdown formatting (no **bold**, no `code`, no bullet lists with -, no > quotes, no # headings). Use plain paragraphs and numbered lists if needed.");
 
         h.put(CMD_SETTINGS,   "设置");
         h.put(CMD_SAVE,       "保存");
@@ -121,9 +121,9 @@ public class I18n {
         h.put(SETTINGS_SAVED, "设置已保存。");
         h.put(CHAT_SYSTEM,    "系统");
 
-        h.put(CMD_SEARCH, "联网搜索");
-        h.put(SEARCH_ENABLED,  "已开启联网搜索");
-        h.put(SEARCH_DISABLED, "已关闭联网搜索");
+        h.put(SETTINGS_SEARCH, "联网搜索");
+        h.put(SETTINGS_YES,    "是");
+        h.put(SETTINGS_NO,     "否");
         return h;
     }
 }

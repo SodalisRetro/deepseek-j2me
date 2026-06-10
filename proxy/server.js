@@ -173,6 +173,49 @@ function stripHtml(str) {
               .replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
+function stripMarkdown(text) {
+    if (!text) return text;
+
+    text = text.replace(/^#{1,6}\s+/gm, '');
+
+    text = text.replace(/\*\*\*(.+?)\*\*\*/g, '$1');
+    text = text.replace(/\*\*(.+?)\*\*/g, '$1');
+    text = text.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '$1');
+
+    text = text.replace(/`{3}[\s\S]*?`{3}/g, function (m) {
+        return '\n' + m.replace(/`{3}\w*\n?/g, '').replace(/`{3}/g, '') + '\n';
+    });
+    text = text.replace(/`(.+?)`/g, '$1');
+
+    text = text.replace(/^[*-]\s+/gm, '\u2022 ');
+
+    text = text.replace(/^>\s?/gm, '| ');
+
+    text = text.replace(/\[(.+?)\]\(.+?\)/g, '$1');
+
+    text = text.replace(/^(\d+)\.\s+/gm, '$1. ');
+
+    text = text.replace(/\n{3,}/g, '\n\n');
+
+    return text.trim();
+}
+
+function stripResponseMarkdown(body) {
+    try {
+        var json = JSON.parse(body);
+        var choices = json.choices;
+        if (choices && choices.length > 0) {
+            var msg = choices[0].message;
+            if (msg && msg.content) {
+                msg.content = stripMarkdown(msg.content);
+            }
+        }
+        return JSON.stringify(json);
+    } catch (e) {
+        return body;
+    }
+}
+
 function sendToDeepSeek(body, res) {
     var encodedBody = Buffer.from(body, 'utf8');
 
@@ -198,8 +241,11 @@ function sendToDeepSeek(body, res) {
                 console.log(responseBody);
             }
             console.log('--- /api response ---');
+
+            var clean = stripResponseMarkdown(responseBody);
+
             res.writeHead(apiRes.statusCode, { 'Content-Type': 'application/json' });
-            res.end(responseBody);
+            res.end(clean);
         });
     });
 
