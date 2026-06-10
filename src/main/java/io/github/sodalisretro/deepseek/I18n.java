@@ -36,6 +36,7 @@ public class I18n {
     public static final String SETTINGS_SEARCH = "settings.search";
     public static final String SETTINGS_YES    = "settings.yes";
     public static final String SETTINGS_NO     = "settings.no";
+    public static final String SETTINGS_MAX_ROUNDS = "settings.max_rounds";
 
     private static Hashtable strings;
 
@@ -54,7 +55,7 @@ public class I18n {
     }
 
     private static Hashtable en() {
-        Hashtable h = new Hashtable(26);
+        Hashtable h = new Hashtable(27);
         h.put(TITLE_IDLE,      "DeepSeek AI  [Idle]");
         h.put(TITLE_THINKING,  "DeepSeek AI  [Thinking...]");
         h.put(TITLE_ERROR,     "DeepSeek AI  [Error]");
@@ -87,11 +88,12 @@ public class I18n {
         h.put(SETTINGS_SEARCH, "Web Search");
         h.put(SETTINGS_YES,    "Yes");
         h.put(SETTINGS_NO,     "No");
+        h.put(SETTINGS_MAX_ROUNDS, "Max Search Rounds");
         return h;
     }
 
     private static Hashtable zhCN() {
-        Hashtable h = new Hashtable(26);
+        Hashtable h = new Hashtable(27);
         h.put(TITLE_IDLE,      "DeepSeek AI  [就绪]");
         h.put(TITLE_THINKING,  "DeepSeek AI  [思考...]");
         h.put(TITLE_ERROR,     "DeepSeek AI  [错误]");
@@ -124,6 +126,7 @@ public class I18n {
         h.put(SETTINGS_SEARCH, "联网搜索");
         h.put(SETTINGS_YES,    "是");
         h.put(SETTINGS_NO,     "否");
+        h.put(SETTINGS_MAX_ROUNDS, "最大搜索轮次");
         return h;
     }
 }

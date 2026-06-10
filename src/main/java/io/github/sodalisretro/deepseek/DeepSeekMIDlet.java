@@ -24,6 +24,8 @@ public class DeepSeekMIDlet extends MIDlet implements CommandListener, Runnable 
     private TextBox inputBox;
     private TextField hostField;
     private TextField portField;
+    private TextField roundsField;
+    private ChoiceGroup searchChoice;
     private Command sendCommand;
     private Command exitCommand;
     private Command settingsCommand;
@@ -33,7 +35,6 @@ public class DeepSeekMIDlet extends MIDlet implements CommandListener, Runnable 
     private Command nextCommand;
     private Command saveCommand;
     private Command settingsBackCommand;
-    private ChoiceGroup searchChoice;
 
     private HttpClient httpClient;
     private Vector messages;
@@ -43,6 +44,7 @@ public class DeepSeekMIDlet extends MIDlet implements CommandListener, Runnable 
     private String currentUserMessage;
     private boolean running;
     private boolean webSearch;
+    private int maxSearchRounds;
     private static final int MAX_HISTORY = 10;
     private static final int MAX_FORM_ITEMS = 30;
     private static final int MAX_INPUT_HISTORY = 20;
@@ -55,6 +57,7 @@ public class DeepSeekMIDlet extends MIDlet implements CommandListener, Runnable 
         historyPos = -1;
         running = false;
         webSearch = Settings.getWebSearch();
+        maxSearchRounds = Settings.getMaxSearchRounds();
 
         httpClient = new HttpClient(Settings.getProxyUrl());
 
@@ -90,9 +93,12 @@ public class DeepSeekMIDlet extends MIDlet implements CommandListener, Runnable 
         searchChoice = new ChoiceGroup(I18n.get(I18n.SETTINGS_SEARCH), ChoiceGroup.EXCLUSIVE,
             new String[] { I18n.get(I18n.SETTINGS_YES), I18n.get(I18n.SETTINGS_NO) }, null);
         searchChoice.setSelectedIndex(webSearch ? 0 : 1, true);
+        roundsField = new TextField(I18n.get(I18n.SETTINGS_MAX_ROUNDS) + ": ",
+            String.valueOf(maxSearchRounds), 2, TextField.NUMERIC);
         settingsForm.append(hostField);
         settingsForm.append(portField);
         settingsForm.append(searchChoice);
+        settingsForm.append(roundsField);
         saveCommand = new Command(I18n.get(I18n.CMD_SAVE), Command.OK, 1);
         settingsBackCommand = new Command(I18n.get(I18n.CMD_BACK), Command.BACK, 2);
         settingsForm.addCommand(saveCommand);
@@ -142,6 +148,11 @@ public class DeepSeekMIDlet extends MIDlet implements CommandListener, Runnable 
                         webSearch = newSearch;
                         Settings.saveWebSearch(newSearch);
                     }
+                    int rounds = parseInt(roundsField.getString());
+                    if (rounds >= 1 && rounds <= 99) {
+                        maxSearchRounds = rounds;
+                        Settings.saveMaxSearchRounds(rounds);
+                    }
                     appendChat(I18n.get(I18n.CHAT_SYSTEM), I18n.get(I18n.SETTINGS_SAVED));
                     if (changed) {
                         appendChat(I18n.get(I18n.CHAT_SYSTEM),
@@ -154,6 +165,7 @@ public class DeepSeekMIDlet extends MIDlet implements CommandListener, Runnable 
                 hostField.setString(Settings.getHost());
                 portField.setString(Settings.getPort());
                 searchChoice.setSelectedIndex(Settings.getWebSearch() ? 0 : 1, true);
+                roundsField.setString(String.valueOf(Settings.getMaxSearchRounds()));
                 display.setCurrent(chatForm);
             }
         } else if (d == chatForm) {
@@ -166,6 +178,7 @@ public class DeepSeekMIDlet extends MIDlet implements CommandListener, Runnable 
                 hostField.setString(Settings.getHost());
                 portField.setString(Settings.getPort());
                 searchChoice.setSelectedIndex(webSearch ? 0 : 1, true);
+                roundsField.setString(String.valueOf(maxSearchRounds));
                 display.setCurrent(settingsForm);
             } else if (c == exitCommand) {
                 notifyDestroyed();
@@ -312,6 +325,18 @@ public class DeepSeekMIDlet extends MIDlet implements CommandListener, Runnable 
         return sb.toString();
     }
 
+    private int parseInt(String s) {
+        if (s == null || s.length() == 0) return 0;
+        int val = 0;
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c >= '0' && c <= '9') {
+                val = val * 10 + (c - '0');
+            }
+        }
+        return val;
+    }
+
     private void appendFormItem(final String text) {
         display.callSerially(new Runnable() {
             public void run() {
@@ -346,6 +371,7 @@ public class DeepSeekMIDlet extends MIDlet implements CommandListener, Runnable 
 
         if (webSearch) {
             sb.append(",\"web_search\":true");
+            sb.append(",\"max_search_rounds\":").append(maxSearchRounds);
         }
 
         sb.append("}");

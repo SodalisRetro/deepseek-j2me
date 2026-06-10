@@ -10,10 +10,12 @@ public class Settings {
 
     private static final String DEFAULT_HOST = "localhost";
     private static final String DEFAULT_PORT = "8080";
+    private static final int DEFAULT_MAX_ROUNDS = 15;
 
     private static String host;
     private static String port;
     private static boolean webSearch;
+    private static int maxSearchRounds;
 
     static {
         RecordStore rs = null;
@@ -32,16 +34,30 @@ public class Settings {
                 port = (j >= 0) ? raw.substring(i, j) : DEFAULT_PORT;
                 i = j + 1;
 
-                webSearch = (i < raw.length() && raw.charAt(i) == '1');
+                j = raw.indexOf('\n', i);
+                if (j >= 0) {
+                    webSearch = (i < j && raw.charAt(i) == '1');
+                    i = j + 1;
+                    if (i < raw.length()) {
+                        maxSearchRounds = parseInt(raw, i);
+                    } else {
+                        maxSearchRounds = DEFAULT_MAX_ROUNDS;
+                    }
+                } else {
+                    webSearch = (i < raw.length() && raw.charAt(i) == '1');
+                    maxSearchRounds = DEFAULT_MAX_ROUNDS;
+                }
             } else {
                 host = DEFAULT_HOST;
                 port = DEFAULT_PORT;
                 webSearch = false;
+                maxSearchRounds = DEFAULT_MAX_ROUNDS;
             }
         } catch (Exception e) {
             host = DEFAULT_HOST;
             port = DEFAULT_PORT;
             webSearch = false;
+            maxSearchRounds = DEFAULT_MAX_ROUNDS;
         } finally {
             if (rs != null) {
                 try { rs.closeRecordStore(); } catch (RecordStoreException ignored) {}
@@ -57,6 +73,8 @@ public class Settings {
 
     public static boolean getWebSearch() { return webSearch; }
 
+    public static int getMaxSearchRounds() { return maxSearchRounds; }
+
     public static void save(String newHost, String newPort) {
         host = newHost;
         port = newPort;
@@ -68,10 +86,15 @@ public class Settings {
         persist();
     }
 
+    public static void saveMaxSearchRounds(int rounds) {
+        maxSearchRounds = rounds;
+        persist();
+    }
+
     private static void persist() {
         RecordStore rs = null;
         try {
-            String raw = host + "\n" + port + "\n" + (webSearch ? "1" : "0");
+            String raw = host + "\n" + port + "\n" + (webSearch ? "1" : "0") + "\n" + maxSearchRounds;
             byte[] data = raw.getBytes();
             rs = RecordStore.openRecordStore(STORE_NAME, true);
             if (rs.getNumRecords() >= RECORD_ID) {
@@ -85,5 +108,15 @@ public class Settings {
                 try { rs.closeRecordStore(); } catch (RecordStoreException ignored) {}
             }
         }
+    }
+
+    private static int parseInt(String s, int start) {
+        int val = 0;
+        int pos = start;
+        while (pos < s.length() && s.charAt(pos) >= '0' && s.charAt(pos) <= '9') {
+            val = val * 10 + (s.charAt(pos) - '0');
+            pos++;
+        }
+        return (pos > start) ? val : DEFAULT_MAX_ROUNDS;
     }
 }
