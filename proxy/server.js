@@ -149,7 +149,13 @@ function handleRequest(body, res) {
             '- Do not retry failed searches. Move on to known URLs instead.\n' +
             '- NEVER output JSON, tool_calls, or raw HTML in your answer. ' +
             'ALWAYS respond in plain natural language. ' +
-            'Extract the answer from the HTML, do not quote it.';
+            'Extract the answer from the HTML, do not quote it.\n' +
+            '\n' +
+            '=== OUTPUT FORMAT (J2ME display constraint) ===\n' +
+            'Output plain text only. Do NOT use Markdown formatting: ' +
+            'no **bold**, no `code`, no bullet lists with -, no > quotes, ' +
+            'no # headings. Use plain paragraphs and numbered lists if needed. ' +
+            'Keep responses concise.';
 
         messages.unshift({
             role: 'system',

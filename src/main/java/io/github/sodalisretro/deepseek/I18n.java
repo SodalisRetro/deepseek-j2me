@@ -25,9 +25,11 @@ public class I18n {
     public static final String INPUT_TITLE     = "input.title";
     public static final String SYSTEM_PROMPT   = "system.prompt";
 
-    public static final String CMD_SETTINGS    = "cmd.settings";
-    public static final String CMD_SAVE        = "cmd.save";
-    public static final String SETTINGS_TITLE  = "settings.title";
+    public static final String CMD_SETTINGS     = "cmd.settings";
+    public static final String CMD_SAVE         = "cmd.save";
+    public static final String CMD_SET_PROMPT   = "cmd.set_prompt";
+    public static final String CMD_RESET        = "cmd.reset";
+    public static final String SETTINGS_TITLE   = "settings.title";
     public static final String SETTINGS_HOST   = "settings.host";
     public static final String SETTINGS_PORT   = "settings.port";
     public static final String SETTINGS_SAVED  = "settings.saved";
@@ -37,6 +39,9 @@ public class I18n {
     public static final String SETTINGS_YES    = "settings.yes";
     public static final String SETTINGS_NO     = "settings.no";
     public static final String SETTINGS_MAX_ROUNDS = "settings.max_rounds";
+    public static final String SETTINGS_PROMPT  = "settings.prompt";
+    public static final String PROMPT_SAVED     = "prompt.saved";
+    public static final String PROMPT_RESET     = "prompt.reset";
 
     private static Hashtable strings;
 
@@ -55,7 +60,7 @@ public class I18n {
     }
 
     private static Hashtable en() {
-        Hashtable h = new Hashtable(27);
+        Hashtable h = new Hashtable(32);
         h.put(TITLE_IDLE,      "DeepSeek AI  [Idle]");
         h.put(TITLE_THINKING,  "DeepSeek AI  [Thinking...]");
         h.put(TITLE_ERROR,     "DeepSeek AI  [Error]");
@@ -75,10 +80,12 @@ public class I18n {
         h.put(ERR_UNKNOWN,     "Unknown error");
         h.put(ERR_PARSE_FAIL,  "Failed to parse response");
         h.put(INPUT_TITLE,     "Message");
-        h.put(SYSTEM_PROMPT,   "You are a helpful assistant. Keep responses concise. Output plain text only. Do NOT use Markdown formatting (no **bold**, no `code`, no bullet lists with -, no > quotes, no # headings). Use plain paragraphs and numbered lists if needed.");
+        h.put(SYSTEM_PROMPT,   "You are a helpful assistant.");
 
         h.put(CMD_SETTINGS,   "Settings");
         h.put(CMD_SAVE,       "Save");
+        h.put(CMD_SET_PROMPT, "System Prompt");
+        h.put(CMD_RESET,      "Reset to Default");
         h.put(SETTINGS_TITLE, "Settings");
         h.put(SETTINGS_HOST,  "Host");
         h.put(SETTINGS_PORT,  "Port");
@@ -89,11 +96,14 @@ public class I18n {
         h.put(SETTINGS_YES,    "Yes");
         h.put(SETTINGS_NO,     "No");
         h.put(SETTINGS_MAX_ROUNDS, "Max Search Rounds");
+        h.put(SETTINGS_PROMPT, "System Prompt");
+        h.put(PROMPT_SAVED,    "Prompt saved.");
+        h.put(PROMPT_RESET,    "Prompt reset to default.");
         return h;
     }
 
     private static Hashtable zhCN() {
-        Hashtable h = new Hashtable(27);
+        Hashtable h = new Hashtable(32);
         h.put(TITLE_IDLE,      "DeepSeek AI  [就绪]");
         h.put(TITLE_THINKING,  "DeepSeek AI  [思考...]");
         h.put(TITLE_ERROR,     "DeepSeek AI  [错误]");
@@ -113,10 +123,12 @@ public class I18n {
         h.put(ERR_UNKNOWN,     "未知错误");
         h.put(ERR_PARSE_FAIL,  "解析响应失败");
         h.put(INPUT_TITLE,     "输入消息");
-        h.put(SYSTEM_PROMPT,   "You are a helpful assistant. Keep responses concise. Output plain text only. Do NOT use Markdown formatting (no **bold**, no `code`, no bullet lists with -, no > quotes, no # headings). Use plain paragraphs and numbered lists if needed.");
+        h.put(SYSTEM_PROMPT,   "You are a helpful assistant.");
 
         h.put(CMD_SETTINGS,   "设置");
         h.put(CMD_SAVE,       "保存");
+        h.put(CMD_SET_PROMPT, "系统提示词");
+        h.put(CMD_RESET,      "恢复默认");
         h.put(SETTINGS_TITLE, "设置");
         h.put(SETTINGS_HOST,  "主机");
         h.put(SETTINGS_PORT,  "端口");
@@ -127,6 +139,9 @@ public class I18n {
         h.put(SETTINGS_YES,    "是");
         h.put(SETTINGS_NO,     "否");
         h.put(SETTINGS_MAX_ROUNDS, "最大搜索轮次");
+        h.put(SETTINGS_PROMPT, "系统提示词");
+        h.put(PROMPT_SAVED,    "提示词已保存。");
+        h.put(PROMPT_RESET,    "提示词已恢复默认。");
         return h;
     }
 }

@@ -22,6 +22,7 @@ public class DeepSeekMIDlet extends MIDlet implements CommandListener, Runnable 
     private Form chatForm;
     private Form settingsForm;
     private TextBox inputBox;
+    private TextBox promptBox;
     private TextField hostField;
     private TextField portField;
     private TextField roundsField;
@@ -35,6 +36,10 @@ public class DeepSeekMIDlet extends MIDlet implements CommandListener, Runnable 
     private Command nextCommand;
     private Command saveCommand;
     private Command settingsBackCommand;
+    private Command promptCommand;
+    private Command promptOkCommand;
+    private Command promptBackCommand;
+    private Command promptResetCommand;
 
     private HttpClient httpClient;
     private Vector messages;
@@ -45,6 +50,7 @@ public class DeepSeekMIDlet extends MIDlet implements CommandListener, Runnable 
     private boolean running;
     private boolean webSearch;
     private int maxSearchRounds;
+    private String systemPrompt;
     private static final int MAX_HISTORY = 10;
     private static final int MAX_FORM_ITEMS = 30;
     private static final int MAX_INPUT_HISTORY = 20;
@@ -58,6 +64,7 @@ public class DeepSeekMIDlet extends MIDlet implements CommandListener, Runnable 
         running = false;
         webSearch = Settings.getWebSearch();
         maxSearchRounds = Settings.getMaxSearchRounds();
+        systemPrompt = Settings.getSystemPrompt();
 
         httpClient = new HttpClient(Settings.getProxyUrl());
 
@@ -101,9 +108,20 @@ public class DeepSeekMIDlet extends MIDlet implements CommandListener, Runnable 
         settingsForm.append(roundsField);
         saveCommand = new Command(I18n.get(I18n.CMD_SAVE), Command.OK, 1);
         settingsBackCommand = new Command(I18n.get(I18n.CMD_BACK), Command.BACK, 2);
+        promptCommand = new Command(I18n.get(I18n.CMD_SET_PROMPT), Command.HELP, 3);
         settingsForm.addCommand(saveCommand);
         settingsForm.addCommand(settingsBackCommand);
+        settingsForm.addCommand(promptCommand);
         settingsForm.setCommandListener(this);
+
+        promptBox = new TextBox(I18n.get(I18n.SETTINGS_PROMPT), systemPrompt, 2000, TextField.ANY);
+        promptOkCommand = new Command(I18n.get(I18n.CMD_SAVE), Command.OK, 1);
+        promptBackCommand = new Command(I18n.get(I18n.CMD_BACK), Command.BACK, 2);
+        promptResetCommand = new Command(I18n.get(I18n.CMD_RESET), Command.STOP, 3);
+        promptBox.addCommand(promptOkCommand);
+        promptBox.addCommand(promptBackCommand);
+        promptBox.addCommand(promptResetCommand);
+        promptBox.setCommandListener(this);
 
         display.setCurrent(chatForm);
         System.out.println("[MIDlet] constructor done");
@@ -116,7 +134,24 @@ public class DeepSeekMIDlet extends MIDlet implements CommandListener, Runnable 
     public void destroyApp(boolean unconditional) {}
 
     public void commandAction(Command c, Displayable d) {
-        if (d == inputBox) {
+        if (d == promptBox) {
+            if (c == promptOkCommand) {
+                String text = promptBox.getString();
+                systemPrompt = text;
+                Settings.saveSystemPrompt(text);
+                appendChat(I18n.get(I18n.CHAT_SYSTEM), I18n.get(I18n.PROMPT_SAVED));
+                display.setCurrent(settingsForm);
+            } else if (c == promptResetCommand) {
+                systemPrompt = I18n.get(I18n.SYSTEM_PROMPT);
+                Settings.saveSystemPrompt("");
+                promptBox.setString(systemPrompt);
+                appendChat(I18n.get(I18n.CHAT_SYSTEM), I18n.get(I18n.PROMPT_RESET));
+                display.setCurrent(settingsForm);
+            } else if (c == promptBackCommand) {
+                promptBox.setString(systemPrompt);
+                display.setCurrent(settingsForm);
+            }
+        } else if (d == inputBox) {
             if (c == okCommand) {
                 String text = inputBox.getString();
                 if (text != null && text.length() > 0) {
@@ -167,6 +202,9 @@ public class DeepSeekMIDlet extends MIDlet implements CommandListener, Runnable 
                 searchChoice.setSelectedIndex(Settings.getWebSearch() ? 0 : 1, true);
                 roundsField.setString(String.valueOf(Settings.getMaxSearchRounds()));
                 display.setCurrent(chatForm);
+            } else if (c == promptCommand) {
+                promptBox.setString(systemPrompt);
+                display.setCurrent(promptBox);
             }
         } else if (d == chatForm) {
             if (c == sendCommand) {
@@ -355,7 +393,7 @@ public class DeepSeekMIDlet extends MIDlet implements CommandListener, Runnable 
         sb.append("{\"model\":\"deepseek-chat\",\"messages\":[");
 
         sb.append("{\"role\":\"system\",\"content\":\"");
-        sb.append(escapeJson(I18n.get(I18n.SYSTEM_PROMPT)));
+        sb.append(escapeJson(systemPrompt));
         sb.append("\"}");
 
         for (int i = 0; i < messages.size(); i++) {
