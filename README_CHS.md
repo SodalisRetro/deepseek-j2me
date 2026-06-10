@@ -1,6 +1,6 @@
 # DeepSeek Chat for J2ME
 
-适用于 J2ME（MIDP 2.0 / CLDC 1.0）的 DeepSeek AI 客户端，配合智能 Node.js
+适用于 J2ME（MIDP 2.0 / CLDC 1.0）的 DeepSeek AI 客户端，配合 Node.js
 代理实现网页搜索、页面抓取和工具调用能力。
 
 已在 [MicroEmulator](https://github.com/barteo/microemu) 和
@@ -11,17 +11,17 @@
 
 ## 功能特性
 
-- **AI 对话** – 发送消息并接收流式响应（纯文本，J2ME 安全格式）。
-- **联网搜索** – 模型自主 DuckDuckGo 搜索，限流时自动降级为 `fetch_page`
+- **AI 对话** – 发送消息并接收流式响应（纯文本格式）。
+- **联网搜索** – 模型调用 DuckDuckGo 进行网页搜索，限流时则调用 `fetch_page`
   直接访问已知网址。先找 URL，再读页面全文。
 - **页面抓取** – 读取任意 URL 的 HTML 源代码。支持分段读取（`offset` 参数）
   以处理长页面。
 - **可编辑系统提示词** – 通过「设置 → 系统提示词」直接在设备上修改助手的
-  角色和规则。随时可恢复默认。
+  角色和规则。
 - **搜索可配置** – 设置中可启用/禁用联网搜索并调整最大搜索轮次（1–99）。
 - **输入历史** – 通过「上条/下条」导航已发送消息。
 - **中英文界面** – 根据设备语言环境自动切换。
-- **Docker 支持** – 一条命令启动代理容器（`node:22-alpine`，约 55 MB）。
+- **Docker 支持** – 支持单条命令启动代理容器。
 
 ---
 
@@ -43,7 +43,7 @@
 
 ---
 
-## 前提条件
+## 前置
 
 | 组件 | 依赖 |
 |------|------|
@@ -147,7 +147,7 @@ gradlew.bat runEmulator   # Windows
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
-| `DEEPSEEK_API_KEY` | *(空)* | 你的 DeepSeek API 密钥 |
+| `DEEPSEEK_API_KEY` | *(空)* | 您的 DeepSeek API 密钥 |
 | `PROXY_PORT` | `8080` | 代理监听的 HTTP 端口 |
 
 ---
@@ -174,5 +174,7 @@ deepseek-j2me/
 
 ## 许可证
 
-GNU LGPL-3.0-only – Copyright (C) 2024-2026 Sodalitas Retrospicere。
+基于 [j2me-hello-gradle](https://github.com/pixtaded/j2me-hello-gradle)
+(MIT)。本项目采用 GNU LGPL-3.0-only 许可 –
+Copyright (C) 2026 Sodalitas Retrospicere。
 详见 [LICENSE](LICENSE)。

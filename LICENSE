@@ -1,5 +1,9 @@
 Copyright (C) 2026 Sodalitas Retrospicere
 
+This project is derived from j2me-hello-gradle (MIT), copyright (C) 2024
+by pixtaded. The original MIT-licensed portions remain governed by that
+license. All modifications and additions are licensed as follows:
+
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Lesser General Public License as published by
 the Free Software Foundation, either version 3 of the License, or
