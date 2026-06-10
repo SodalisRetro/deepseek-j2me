@@ -185,7 +185,7 @@ deepseek-j2me/
 
 ## License
 
-Derived from [j2me-hello-gradle](https://github.com/pixtaded/j2me-hello-gradle)
+Derived from [j2me-hello-gradle](https://gitea.bedohswe.eu.org/pixtaded/j2me-hello-gradle)
 (MIT). This project is licensed under GNU LGPL-3.0-only –
 Copyright (C) 2026 Sodalitas Retrospicere.
 See [LICENSE](LICENSE) for full terms.
