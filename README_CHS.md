@@ -48,7 +48,7 @@
 | 组件 | 依赖 |
 |------|------|
 | 代理服务 | Node.js ≥ 18（或 Docker） |
-| J2ME 构建 | JDK ≥ 8、Gradle（包含 wrapper） |
+| J2ME 构建 | JDK ≥ 8、Gradle（包含 wrapper）、Sun WTK 2.5.2 |
 | API 密钥 | [DeepSeek API key](https://platform.deepseek.com/api_keys) |
 
 ---
@@ -88,6 +88,9 @@ curl -X POST http://localhost:8080/ \
 ## 快速开始 – J2ME 应用
 
 ### 构建
+
+需要 [Sun WTK 2.5.2](https://www.oracle.com/java/technologies/java-archive-me-downloads.html)
+进行 CLDC 预验证。构建脚本默认在 `C:/WTK2.5.2` 查找。
 
 ```bash
 ./gradlew jar          # Linux / macOS

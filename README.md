@@ -56,7 +56,7 @@ definitions, formatting rules) and manages a tool‑calling loop with
 | Component | Requires |
 |-----------|----------|
 | Proxy     | Node.js ≥ 18 (or Docker) |
-| J2ME build | JDK ≥ 8, Gradle (wrapper included) |
+| J2ME build | JDK ≥ 8, Gradle (wrapper included), Sun WTK 2.5.2 |
 | API key   | [DeepSeek API key](https://platform.deepseek.com/api_keys) |
 
 ---
@@ -97,6 +97,9 @@ curl -X POST http://localhost:8080/ \
 ## Quick Start – J2ME App
 
 ### Build
+
+Requires [Sun WTK 2.5.2](https://www.oracle.com/java/technologies/java-archive-me-downloads.html)
+for CLDC preverification. The build expects it at `C:/WTK2.5.2`.
 
 ```bash
 ./gradlew jar          # Linux / macOS
