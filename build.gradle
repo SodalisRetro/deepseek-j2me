@@ -10,14 +10,21 @@ version = '0.1.0'
 // ============================================================
 ext {
     wtkHome = 'C:/WTK2.5.2'
+    wtkJarDir = file("$wtkHome/lib")
     meHome = file('microemulator-2.0.4')
     cldcJar = "$meHome/lib/cldcapi11.jar"
     midpJar = "$meHome/lib/midpapi20.jar"
     meJar   = "$meHome/microemulator.jar"
     lwuitJar = file('lib/LWUIT_MIDP.jar')
     midpIoJar = file('lib/MIDP_IO.jar')
-    jsr184Jar = file("$wtkHome/lib/jsr184.jar")
 }
+
+// All WTK lib jars for bootclasspath & preverify
+def wtkJars() {
+    fileTree(dir: wtkJarDir, include: '*.jar').collect { it.absolutePath }.join(File.pathSeparator)
+}
+
+def allClasspath = files(cldcJar, midpJar, lwuitJar, midpIoJar, fileTree(wtkJarDir))
 
 // ============================================================
 // Compilation: target CLDC-1.1 / MIDP-2.0
@@ -31,9 +38,9 @@ compileJava {
     options.encoding = 'UTF-8'
     options.compilerArgs = [
         '-bootclasspath',
-        files(cldcJar, midpJar).asPath
+        wtkJars()
     ]
-    classpath = files(cldcJar, midpJar, lwuitJar, midpIoJar, jsr184Jar)
+    classpath = allClasspath
     // Output raw classes to a separate dir (not the default)
     // so they never end up in the final jar
     destinationDir = file("${buildDir}/classes-raw")
@@ -58,7 +65,7 @@ tasks.register('preverify') {
             workingDir = projectDir
             executable = "$wtkHome/bin/preverify.exe"
             args = [
-                    '-classpath', [cldcJar, midpJar, lwuitJar, midpIoJar, jsr184Jar, compileJava.destinationDir.absolutePath].join(';'),
+                    '-classpath', [wtkJars(), compileJava.destinationDir.absolutePath, 'lib/LWUIT_MIDP.jar', 'lib/MIDP_IO.jar'].join(';'),
                     '-d',          preverifiedDir.absolutePath,
                     compileJava.destinationDir.absolutePath
             ]
