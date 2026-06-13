@@ -144,9 +144,11 @@ tasks.register('runEmulator') {
                     "$meHome/devices/microemu-device-default.jar",
                     cldcJar,
                     midpJar,
+                    "$wtkHome/lib/mmapi.jar",
                     lwuitJar,
                     midpIoJar
             )
+            jvmArgs '-Dsun.java2d.d3d=false'
             args = [jar.archiveFile.get().asFile.absolutePath]
         }
     }
@@ -158,6 +160,14 @@ tasks.register('runEmulator') {
 tasks.register('jarRaw', Jar) {
     dependsOn classes
     from compileJava.destinationDir
+    from sourceSets.main.resources
+    from zipTree(lwuitJar)
+    from zipTree(midpIoJar)
+    eachFile { FileCopyDetails fcp ->
+        if (fcp.path.startsWith('META-INF/') && fcp.path != 'META-INF/MANIFEST.MF') {
+            fcp.exclude()
+        }
+    }
     archiveClassifier = 'raw'
     manifest {
         attributes(
@@ -186,9 +196,11 @@ tasks.register('runEmulatorFast') {
                     "$meHome/devices/microemu-device-default.jar",
                     cldcJar,
                     midpJar,
+                    "$wtkHome/lib/mmapi.jar",
                     lwuitJar,
                     midpIoJar
             )
+            jvmArgs '-Dsun.java2d.d3d=false'
             args = [tasks.jarRaw.archiveFile.get().asFile.absolutePath]
         }
     }
