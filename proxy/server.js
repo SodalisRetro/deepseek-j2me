@@ -1,6 +1,5 @@
 const http = require('http');
 const https = require('https');
-const zlib = require('zlib');
 const { marked } = require('marked');
 
 // Configure marked for basic HTML4 output (no typographer, no breaks)
@@ -625,18 +624,6 @@ function sendToDeepSeek(body, res) {
 
 function writeHtml(res, statusCode, responseBody) {
     var htmlResponse = convertResponseToHtml(responseBody);
-
-    zlib.gzip(Buffer.from(htmlResponse, 'utf8'), function (err, compressed) {
-        if (err) {
-            // Fall back to uncompressed
-            res.writeHead(statusCode, { 'Content-Type': 'application/json' });
-            res.end(htmlResponse);
-            return;
-        }
-        res.writeHead(statusCode, {
-            'Content-Type': 'application/json',
-            'Content-Encoding': 'gzip'
-        });
-        res.end(compressed);
-    });
+    res.writeHead(statusCode, { 'Content-Type': 'application/json' });
+    res.end(htmlResponse);
 }
