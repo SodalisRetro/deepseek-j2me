@@ -11,10 +11,6 @@ version = '0.1.0'
 ext {
     wtkHome = 'C:/WTK2.5.2'
     wtkJarDir = file("$wtkHome/lib")
-    meHome = file('microemulator-2.0.4')
-    cldcJar = "$meHome/lib/cldcapi11.jar"
-    midpJar = "$meHome/lib/midpapi20.jar"
-    meJar   = "$meHome/microemulator.jar"
     lwuitJar = file('lib/LWUIT_MIDP.jar')
     midpIoJar = file('lib/MIDP_IO.jar')
 }
@@ -24,7 +20,7 @@ def wtkJars() {
     fileTree(dir: wtkJarDir, include: '*.jar').collect { it.absolutePath }.join(File.pathSeparator)
 }
 
-def allClasspath = files(cldcJar, midpJar, lwuitJar, midpIoJar, fileTree(wtkJarDir))
+def allClasspath = files(lwuitJar, midpIoJar, fileTree(wtkJarDir))
 
 // ============================================================
 // Compilation: target CLDC-1.1 / MIDP-2.0
@@ -127,26 +123,6 @@ tasks.register('generateJad') {
         ]
         jadFile.text = jadProperties.collect { key, value -> "${key}: ${value}" }.join('\n') + '\n'
         logger.lifecycle "JAD generated: ${jadFile.absolutePath}"
-    }
-}
-
-// ============================================================
-// Run in MicroEmulator
-// ============================================================
-tasks.register('runEmulator') {
-    dependsOn jar
-    doLast {
-        javaexec {
-            mainClass = 'org.microemu.app.Main'
-            classpath = files(
-                    meJar,
-                    "$meHome/devices/microemu-device-resizable.jar",
-                    "$meHome/devices/microemu-device-default.jar",
-                    cldcJar,
-                    midpJar
-            )
-            args = [jar.archiveFile.get().asFile.absolutePath]
-        }
     }
 }
 
