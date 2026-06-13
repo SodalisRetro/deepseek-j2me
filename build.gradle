@@ -131,7 +131,7 @@ tasks.register('generateJad') {
 }
 
 // ============================================================
-// Run in MicroEmulator
+// Run in MicroEmulator (preverified jar)
 // ============================================================
 tasks.register('runEmulator') {
     dependsOn jar
@@ -146,6 +146,46 @@ tasks.register('runEmulator') {
                     midpJar
             )
             args = [jar.archiveFile.get().asFile.absolutePath]
+        }
+    }
+}
+
+// ============================================================
+// Raw jar from uncompiled classes (no preverify)
+// ============================================================
+tasks.register('jarRaw', Jar) {
+    dependsOn classes
+    from compileJava.destinationDir
+    archiveClassifier = 'raw'
+    manifest {
+        attributes(
+                'MIDlet-Name':          MIDletName,
+                'MIDlet-Version':       MIDletVersion,
+                'MIDlet-Vendor':        MIDletVendor,
+                'MIDlet-1':             "${MIDletName}, ${icon}, ${mainClass}",
+                'MicroEdition-Configuration': MicroEditionConfiguration,
+                'MicroEdition-Profile': MicroEditionProfile,
+                'MIDlet-Description':   MIDletDescription
+        )
+    }
+}
+
+// ============================================================
+// Run in MicroEmulator (raw classes, skip preverify)
+// ============================================================
+tasks.register('runEmulatorFast') {
+    dependsOn jarRaw
+    doLast {
+        javaexec {
+            mainClass = 'org.microemu.app.Main'
+            classpath = files(
+                    meJar,
+                    "$meHome/devices/microemu-device-resizable.jar",
+                    "$meHome/devices/microemu-device-default.jar",
+                    cldcJar,
+                    midpJar
+            )
+            args = [tasks.jarRaw.archiveFile.get().asFile.absolutePath]
         }
     }
 }
