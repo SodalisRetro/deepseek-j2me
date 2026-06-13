@@ -253,38 +253,25 @@ function deepSearchLoop(json, res, round, maxRounds) {
         if (round >= maxRounds) {
             console.log('Max rounds reached (' + maxRounds + '), forcing final answer');
 
-            if (finishReason === 'tool_calls' && message.tool_calls && message.tool_calls.length > 0) {
-                json.messages.push(message);
-                executeToolCalls(json, message.tool_calls, function () {
-                    delete json.tools;
-                    delete json.tool_choice;
-                    sendRequest(JSON.stringify(json), function (err2, sc2, rb2) {
-                        if (err2) {
-                            res.writeHead(502, { 'Content-Type': 'application/json' });
-                            res.end(JSON.stringify({ error: { message: 'Proxy error: ' + err2.message } }));
-                            return;
-                        }
-                        writeHtml(res, sc2, rb2);
-                    });
-                });
-                return;
-            }
-
-            if (message && message.content) {
-                json.messages.push(message);
-                delete json.tools;
-                delete json.tool_choice;
-                sendRequest(JSON.stringify(json), function (err2, sc2, rb2) {
-                    if (err2) {
-                        res.writeHead(502, { 'Content-Type': 'application/json' });
-                        res.end(JSON.stringify({ error: { message: 'Proxy error: ' + err2.message } }));
-                        return;
-                    }
-                    writeHtml(res, sc2, rb2);
-                });
-            } else {
-                writeHtml(res, 200, responseBody);
-            }
+            // Don't execute more tool calls — tell the model to summarize
+            // what it already knows in a final answer.
+            json.messages.push({
+                role: 'system',
+                content: 'You have reached the maximum number of research rounds. ' +
+                    'Stop researching immediately and give your best final answer ' +
+                    'based on the information you have already gathered. ' +
+                    'Do NOT use any tools. Just answer.'
+            });
+            delete json.tools;
+            delete json.tool_choice;
+            sendRequest(JSON.stringify(json), function (err2, sc2, rb2) {
+                if (err2) {
+                    res.writeHead(502, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: { message: 'Proxy error: ' + err2.message } }));
+                    return;
+                }
+                writeHtml(res, sc2, rb2);
+            });
             return;
         }
 
@@ -584,12 +571,22 @@ function convertResponseToHtml(responseBody) {
         if (choices && choices.length > 0) {
             var msg = choices[0].message;
             if (msg && msg.content) {
-                // Escape DSML/template tags (e.g. <|im_start|>, |im_end|>) before
-                // markdown conversion so marked doesn't interpret them as HTML.
-                var safe = msg.content
-                    .replace(/<\|/g, '&lt;|')
-                    .replace(/\|>/g, '|&gt;');
-                msg.content = markdownToHtml(safe);
+                // Strip ALL DSML constructs entirely before markdown conversion.
+                // DeepSeek emits markers like <|im_start|>, <|im_end|>,
+                // <|| DSML || tool_calls>, <|| DSML || invoke_name=...> etc.
+                // These use full angle-bracket syntax that LWUIT's HTML parser
+                // interprets as invalid HTML tags, causing it to stop rendering
+                // ALL subsequent content (and go blank on re-render).
+                // Key: we must remove the ENTIRE <|...> construct, including both
+                // angle brackets, before marked ever sees it.
+                var clean = msg.content
+                    .replace(/<\|+[\s\S]*?>/g, '')
+                    .replace(/\|im_start\|\s*>/g, '')
+                    .replace(/\|im_end\|\s*>/g, '')
+                    .replace(/\|>\s*/g, '')
+                    .replace(/<\|/g, '')
+                    .trim();
+                msg.content = markdownToHtml(clean);
             }
         }
         return JSON.stringify(json);

@@ -3,6 +3,7 @@ package io.github.sodalisretro.deepseek;
 import com.sun.lwuit.Button;
 import com.sun.lwuit.CheckBox;
 import com.sun.lwuit.Command;
+import com.sun.lwuit.Component;
 import com.sun.lwuit.Container;
 import com.sun.lwuit.Dialog;
 import com.sun.lwuit.Display;
@@ -58,6 +59,7 @@ public class DeepSeekMIDlet extends MIDlet implements ActionListener, Runnable {
     private boolean currentSearch;
     private int maxSearchRounds;
     private String systemPrompt;
+    private int selectedMessageIndex;
     private static final int MAX_HISTORY = 10;
     private static final int MAX_FORM_ITEMS = 30;
     private static final int MAX_INPUT_HISTORY = 20;
@@ -70,6 +72,7 @@ public class DeepSeekMIDlet extends MIDlet implements ActionListener, Runnable {
         inputHistory = new Vector();
         historyPos = -1;
         running = false;
+        selectedMessageIndex = 0;
         webSearch = Settings.getWebSearch();
         maxSearchRounds = Settings.getMaxSearchRounds();
         systemPrompt = Settings.getSystemPrompt();
@@ -134,6 +137,18 @@ public class DeepSeekMIDlet extends MIDlet implements ActionListener, Runnable {
         chatForm.addGameKeyListener(Display.GAME_FIRE, new ActionListener() {
             public void actionPerformed(ActionEvent evt) {
                 inputField.requestFocus();
+            }
+        });
+
+        // 4/left → previous (older) message, 6/right → next (newer) message
+        chatForm.addGameKeyListener(Display.GAME_LEFT, new ActionListener() {
+            public void actionPerformed(ActionEvent evt) {
+                navigateMessage(true);
+            }
+        });
+        chatForm.addGameKeyListener(Display.GAME_RIGHT, new ActionListener() {
+            public void actionPerformed(ActionEvent evt) {
+                navigateMessage(false);
             }
         });
 
@@ -213,13 +228,11 @@ public class DeepSeekMIDlet extends MIDlet implements ActionListener, Runnable {
             String text = promptArea.getText();
             systemPrompt = text;
             Settings.saveSystemPrompt(text);
-            appendChat(I18n.get(I18n.CHAT_SYSTEM), I18n.get(I18n.PROMPT_SAVED));
 
         } else if (cmd == promptResetCommand) {
             systemPrompt = I18n.get(I18n.SYSTEM_PROMPT);
             Settings.saveSystemPrompt("");
             promptArea.setText(systemPrompt);
-            appendChat(I18n.get(I18n.CHAT_SYSTEM), I18n.get(I18n.PROMPT_RESET));
 
         } else if (cmd == promptBackCommand) {
             promptArea.setText(systemPrompt);
@@ -241,12 +254,6 @@ public class DeepSeekMIDlet extends MIDlet implements ActionListener, Runnable {
                 if (rounds >= 1 && rounds <= 99) {
                     maxSearchRounds = rounds;
                     Settings.saveMaxSearchRounds(rounds);
-                }
-                appendChat(I18n.get(I18n.CHAT_SYSTEM), I18n.get(I18n.SETTINGS_SAVED));
-                if (changed) {
-                    appendChat(I18n.get(I18n.CHAT_SYSTEM),
-                        I18n.get(I18n.SETTINGS_SEARCH) + " [" +
-                        I18n.get(webSearch ? I18n.SETTINGS_YES : I18n.SETTINGS_NO) + "]");
                 }
             }
             chatForm.show();
@@ -284,6 +291,40 @@ public class DeepSeekMIDlet extends MIDlet implements ActionListener, Runnable {
             } else {
                 inputField.requestFocus();
             }
+        }
+    }
+
+    private void navigateMessage(boolean previous) {
+        int count = chatContainer.getComponentCount();
+        if (count <= 1) return;
+        if (previous) {
+            if (selectedMessageIndex < count - 1) {
+                selectedMessageIndex++;
+            } else {
+                selectedMessageIndex = 0;
+            }
+        } else {
+            if (selectedMessageIndex > 0) {
+                selectedMessageIndex--;
+            } else {
+                selectedMessageIndex = count - 1;
+            }
+        }
+        Component target = chatContainer.getComponentAt(selectedMessageIndex);
+        chatContainer.scrollRectToVisible(
+            target.getX(), target.getY(),
+            target.getWidth(), target.getHeight(),
+            chatContainer);
+    }
+
+    private void scrollToNewest() {
+        selectedMessageIndex = 0;
+        if (chatContainer.getComponentCount() > 0) {
+            Component target = chatContainer.getComponentAt(0);
+            chatContainer.scrollRectToVisible(
+                target.getX(), target.getY(),
+                target.getWidth(), target.getHeight(),
+                chatContainer);
         }
     }
 
@@ -445,6 +486,7 @@ public class DeepSeekMIDlet extends MIDlet implements ActionListener, Runnable {
                 }
                 chatContainer.addComponent(0, createMessageLabel("\n" + text));
                 chatForm.revalidate();
+                scrollToNewest();
             }
         };
         if (Display.getInstance().isEdt()) {
@@ -484,6 +526,7 @@ public class DeepSeekMIDlet extends MIDlet implements ActionListener, Runnable {
                     item.addComponent(htmlComp);
                     chatContainer.addComponent(0, item);
                     chatForm.revalidate();
+                    scrollToNewest();
                 } catch (Exception e) {
                     TextArea fallback = new TextArea(html);
                     fallback.setEditable(false);
@@ -491,6 +534,7 @@ public class DeepSeekMIDlet extends MIDlet implements ActionListener, Runnable {
                     item.addComponent(fallback);
                     chatContainer.addComponent(0, item);
                     chatForm.revalidate();
+                    scrollToNewest();
                 }
             }
         };
