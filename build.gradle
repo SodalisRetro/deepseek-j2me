@@ -94,6 +94,15 @@ jar {
     dependsOn prepareJarClasses
     description = 'Build MIDlet jar from preverified classes'
 
+    from zipTree(lwuitJar)
+    from zipTree(midpIoJar)
+    from zipTree(jzlibJar)
+    eachFile { FileCopyDetails fcp ->
+        if (fcp.path.startsWith('META-INF/') && fcp.path != 'META-INF/MANIFEST.MF') {
+            fcp.exclude()
+        }
+    }
+
     manifest {
         attributes(
                 'MIDlet-Name':          MIDletName,
@@ -138,7 +147,6 @@ tasks.register('runEmulator') {
     dependsOn jar
     doLast {
         javaexec {
-            executable = 'C:\\Program Files\\Microsoft\\jdk-21.0.7.6-hotspot\\bin\\java.exe'
             mainClass = 'org.microemu.app.Main'
             classpath = files(
                     meJar,
@@ -193,7 +201,6 @@ tasks.register('runEmulatorFast') {
     dependsOn jarRaw
     doLast {
         javaexec {
-            executable = 'C:\\Program Files\\Microsoft\\jdk-21.0.7.6-hotspot\\bin\\java.exe'
             mainClass = 'org.microemu.app.Main'
             classpath = files(
                     meJar,

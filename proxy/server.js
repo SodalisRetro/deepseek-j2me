@@ -2,11 +2,25 @@ const http = require('http');
 const https = require('https');
 const { marked } = require('marked');
 
-// Configure marked for basic HTML4 output (no typographer, no breaks)
+// Configure marked for LWUIT-compatible HTML output
+// LWUIT HTML parser is based on XHTML-MP 1.0 (strict XML)
 marked.setOptions({
   gfm: true,
   breaks: true,
-  pedantic: false
+  pedantic: false,
+  xhtml: true
+});
+
+// Override individual renderers, keeping defaults for everything else
+marked.use({
+  renderer: {
+    br: function() { return '<br/>\n'; },
+    hr: function() { return '<br/>\n'; },
+    image: function() { return ''; },
+    link: function(token) {
+        return '<a style="color:#4488ff;" href="' + token.href + '">' + token.text + '</a> <font color="#666666">(' + token.href + ')</font>';
+      }
+  }
 });
 
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || '';
@@ -553,17 +567,15 @@ function stripHtml(str) {
 function markdownToHtml(markdown) {
     if (!markdown) return '';
     var rawHtml = marked.parse(markdown);
-    // LWUIT HTMLComponent only supports basic HTML4 tags
-    // Remove tags known to be problematic
-    rawHtml = rawHtml.replace(/<table[\s\S]*?<\/table>/gi, '<p>[table]</p>');
-    rawHtml = rawHtml.replace(/<img[^>]*>/gi, '');
+    // LWUIT HTMLComponent supports most HTML4 tags + CSS2.1 selectors
+    // Remove only tags known to cause setBodyText to throw
     rawHtml = rawHtml.replace(/<svg[\s\S]*?<\/svg>/gi, '');
     rawHtml = rawHtml.replace(/<video[\s\S]*?<\/video>/gi, '');
     rawHtml = rawHtml.replace(/<script[\s\S]*?<\/script>/gi, '');
     rawHtml = rawHtml.replace(/<style[\s\S]*?<\/style>/gi, '');
-    rawHtml = rawHtml.replace(/<hr\s*\/?>/gi, '<br>');
     return '<div style="padding:2px 6px; margin:2px 0">' + rawHtml + '</div>';
 }
+
 
 function convertResponseToHtml(responseBody) {
     try {
@@ -572,8 +584,12 @@ function convertResponseToHtml(responseBody) {
         if (choices && choices.length > 0) {
             var msg = choices[0].message;
             if (msg && msg.content) {
-                // Replace \n\n with actual newlines for marked to process
-                msg.content = markdownToHtml(msg.content);
+                // Escape DSML/template tags (e.g. <|im_start|>, |im_end|>) before
+                // markdown conversion so marked doesn't interpret them as HTML.
+                var safe = msg.content
+                    .replace(/<\|/g, '&lt;|')
+                    .replace(/\|>/g, '|&gt;');
+                msg.content = markdownToHtml(safe);
             }
         }
         return JSON.stringify(json);

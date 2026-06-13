@@ -475,20 +475,23 @@ public class DeepSeekMIDlet extends MIDlet implements ActionListener, Runnable {
                 Label headerLabel = new Label(" " + header);
                 item.addComponent(headerLabel);
                 HTMLComponent htmlComp = new HTMLComponent();
+                htmlComp.setShowImages(false);
+                // TODO: Image support — replace with custom DocumentRequestHandler
+                // that async-downloads and scales images to fit screen width.
+                // For now images are stripped at proxy level (server.js).
                 try {
                     htmlComp.setBodyText(html);
+                    item.addComponent(htmlComp);
+                    chatContainer.addComponent(0, item);
+                    chatForm.revalidate();
                 } catch (Exception e) {
-                    TextArea fallback = new TextArea(header + "\n" + html);
+                    TextArea fallback = new TextArea(html);
                     fallback.setEditable(false);
                     fallback.setFocusable(false);
                     item.addComponent(fallback);
                     chatContainer.addComponent(0, item);
                     chatForm.revalidate();
-                    return;
                 }
-                item.addComponent(htmlComp);
-                chatContainer.addComponent(0, item);
-                chatForm.revalidate();
             }
         };
         if (Display.getInstance().isEdt()) {
