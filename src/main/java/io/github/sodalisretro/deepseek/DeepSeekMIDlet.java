@@ -60,6 +60,8 @@ public class DeepSeekMIDlet extends MIDlet implements ActionListener, Runnable {
     private int maxSearchRounds;
     private String systemPrompt;
     private int selectedMessageIndex;
+    private long thinkingStartTime;
+    private boolean thinking;
     private static final int MAX_HISTORY = 10;
     private static final int MAX_FORM_ITEMS = 30;
     private static final int MAX_INPUT_HISTORY = 20;
@@ -328,6 +330,38 @@ public class DeepSeekMIDlet extends MIDlet implements ActionListener, Runnable {
         }
     }
 
+    private void startThinkingTimer() {
+        new Thread() {
+            public void run() {
+                while (thinking) {
+                    final String elapsed = formatElapsed(
+                        System.currentTimeMillis() - thinkingStartTime);
+                    Display.getInstance().callSerially(new Runnable() {
+                        public void run() {
+                            chatForm.setTitle(
+                                I18n.get(I18n.TITLE_THINKING) + " " + elapsed);
+                        }
+                    });
+                    try {
+                        Thread.sleep(1000);
+                    } catch (InterruptedException e) {
+                        break;
+                    }
+                }
+            }
+        }.start();
+    }
+
+    private String formatElapsed(long ms) {
+        int totalSec = (int)(ms / 1000);
+        if (totalSec < 60) {
+            return totalSec + I18n.get(I18n.TIMER_SEC);
+        }
+        int min = totalSec / 60;
+        int sec = totalSec % 60;
+        return min + I18n.get(I18n.TIMER_MIN) + sec + I18n.get(I18n.TIMER_SEC);
+    }
+
     private void addInputHistory(String text) {
         for (int i = 0; i < inputHistory.size(); i++) {
             if (text.equals((String) inputHistory.elementAt(i))) {
@@ -365,6 +399,9 @@ public class DeepSeekMIDlet extends MIDlet implements ActionListener, Runnable {
             : I18n.get(I18n.CHAT_YOU);
         appendChat(label, currentUserMessage);
         addHistoryMessage("user", currentUserMessage);
+        thinkingStartTime = System.currentTimeMillis();
+        thinking = true;
+        startThinkingTimer();
         chatForm.setTitle(I18n.get(I18n.TITLE_THINKING));
         running = true;
         new Thread(this).start();
@@ -394,6 +431,7 @@ public class DeepSeekMIDlet extends MIDlet implements ActionListener, Runnable {
     }
 
     private void handleResponse(String response) {
+        thinking = false;
         if (response == null) {
             appendChat(I18n.get(I18n.CHAT_ERROR), I18n.get(I18n.ERR_NO_RESPONSE));
             chatForm.setTitle(I18n.get(I18n.TITLE_ERROR));
