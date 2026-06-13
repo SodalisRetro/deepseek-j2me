@@ -73,7 +73,7 @@ public class I18n {
         h.put(CMD_PREV, "Prev Send");
         h.put(CMD_NEXT, "Next Send");
 
-        h.put(CHAT_HINT,       "--- Press Send to send message ---");
+        h.put(CHAT_HINT,       "--- Press OK to input ---");
         h.put(CHAT_YOU,        "You");
         h.put(CHAT_ERROR,      "Error");
         h.put(ERR_NO_RESPONSE, "No response (proxy not running?)");
@@ -116,7 +116,7 @@ public class I18n {
         h.put(CMD_PREV, "上条");
         h.put(CMD_NEXT, "下条");
 
-        h.put(CHAT_HINT,       "--- 点击发送输入消息 ---");
+        h.put(CHAT_HINT,       "--- 按OK开始输入 ---");
         h.put(CHAT_YOU,        "你");
         h.put(CHAT_ERROR,      "错误");
         h.put(ERR_NO_RESPONSE, "无响应 (proxy 是否已启动?)");

@@ -106,11 +106,13 @@ public class HttpClient {
                 sb.append((char) b);
                 i++;
             } else if ((b & 0xE0) == 0xC0) {
+                if (i + 1 >= len) { sb.append('?'); i++; continue; }
                 int c1 = bytes[i + 1] & 0xFF;
                 char ch = (char) (((b & 0x1F) << 6) | (c1 & 0x3F));
                 sb.append(ch);
                 i += 2;
             } else if ((b & 0xF0) == 0xE0) {
+                if (i + 2 >= len) { sb.append('?'); i++; continue; }
                 int c1 = bytes[i + 1] & 0xFF;
                 int c2 = bytes[i + 2] & 0xFF;
                 char ch = (char) (((b & 0x0F) << 12) | ((c1 & 0x3F) << 6) | (c2 & 0x3F));

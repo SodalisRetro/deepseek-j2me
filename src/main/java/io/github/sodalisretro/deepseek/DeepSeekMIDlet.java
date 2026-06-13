@@ -1,39 +1,44 @@
 package io.github.sodalisretro.deepseek;
 
+import com.sun.lwuit.Button;
+import com.sun.lwuit.CheckBox;
+import com.sun.lwuit.Command;
+import com.sun.lwuit.Container;
+import com.sun.lwuit.Dialog;
+import com.sun.lwuit.Display;
+import com.sun.lwuit.Form;
+import com.sun.lwuit.Label;
+import com.sun.lwuit.TextArea;
+import com.sun.lwuit.TextField;
+import com.sun.lwuit.events.ActionEvent;
+import com.sun.lwuit.events.ActionListener;
+import com.sun.lwuit.layouts.BorderLayout;
+import com.sun.lwuit.layouts.BoxLayout;
 import java.io.IOException;
 import java.util.Calendar;
 import java.util.Hashtable;
 import java.util.Vector;
-import javax.microedition.lcdui.ChoiceGroup;
-import javax.microedition.lcdui.Command;
-import javax.microedition.lcdui.CommandListener;
-import javax.microedition.lcdui.Display;
-import javax.microedition.lcdui.Displayable;
-import javax.microedition.lcdui.Form;
-import javax.microedition.lcdui.Item;
-import javax.microedition.lcdui.StringItem;
-import javax.microedition.lcdui.TextBox;
-import javax.microedition.lcdui.TextField;
 import javax.microedition.midlet.MIDlet;
 
-public class DeepSeekMIDlet extends MIDlet implements CommandListener, Runnable {
+public class DeepSeekMIDlet extends MIDlet implements ActionListener, Runnable {
 
-    private Display display;
     private Form chatForm;
     private Form settingsForm;
-    private TextBox inputBox;
-    private TextBox promptBox;
+    private Container chatContainer;
+    private TextField inputField;
+    private Dialog promptDialog;
+    private TextArea promptArea;
     private TextField hostField;
     private TextField portField;
     private TextField roundsField;
-    private ChoiceGroup searchChoice;
-    private Command sendCommand;
+    private com.sun.lwuit.ComboBox searchList;
+    private CheckBox searchCheck;
+
     private Command exitCommand;
     private Command settingsCommand;
-    private Command okCommand;
-    private Command backCommand;
     private Command prevCommand;
     private Command nextCommand;
+    private Command inputCommand;
     private Command saveCommand;
     private Command settingsBackCommand;
     private Command promptCommand;
@@ -49,6 +54,7 @@ public class DeepSeekMIDlet extends MIDlet implements CommandListener, Runnable 
     private String currentUserMessage;
     private boolean running;
     private boolean webSearch;
+    private boolean currentSearch;
     private int maxSearchRounds;
     private String systemPrompt;
     private static final int MAX_HISTORY = 10;
@@ -56,8 +62,9 @@ public class DeepSeekMIDlet extends MIDlet implements CommandListener, Runnable 
     private static final int MAX_INPUT_HISTORY = 20;
 
     public DeepSeekMIDlet() {
-        System.out.println("[MIDlet] constructor start");
-        display = Display.getDisplay(this);
+        System.out.println("[MIDlet] LWUIT constructor start");
+        Display.init(this);
+
         messages = new Vector();
         inputHistory = new Vector();
         historyPos = -1;
@@ -69,62 +76,118 @@ public class DeepSeekMIDlet extends MIDlet implements CommandListener, Runnable 
         httpClient = new HttpClient(Settings.getProxyUrl());
 
         chatForm = new Form(I18n.get(I18n.TITLE_IDLE));
-        appendFormItem(I18n.get(I18n.CHAT_HINT));
+        chatForm.setLayout(new BorderLayout());
+        chatForm.setScrollable(false);
 
-        appendChat(I18n.get(I18n.CHAT_SYSTEM),
-            I18n.get(I18n.SETTINGS_SEARCH) + " [" +
-            I18n.get(webSearch ? I18n.SETTINGS_YES : I18n.SETTINGS_NO) + "]");
+        chatContainer = new Container(new BoxLayout(BoxLayout.Y_AXIS));
+        chatContainer.setScrollableY(true);
+        chatContainer.setFocusable(true);
+        chatContainer.setNextFocusDown(chatContainer);
+        chatContainer.setNextFocusUp(chatContainer);
+        chatForm.addComponent(BorderLayout.CENTER, chatContainer);
 
-        sendCommand = new Command(I18n.get(I18n.CMD_SEND), Command.OK, 1);
-        exitCommand = new Command(I18n.get(I18n.CMD_EXIT), Command.EXIT, 2);
-        settingsCommand = new Command(I18n.get(I18n.CMD_SETTINGS), Command.HELP, 3);
-        chatForm.addCommand(sendCommand);
+        chatContainer.addComponent(new Label(" " + I18n.get(I18n.CHAT_HINT)));
+
+        // Bottom input bar: Send button + TextField, Web checkbox below
+        Container bottomBar = new Container(new BoxLayout(BoxLayout.Y_AXIS));
+        Container inputRow = new Container(new BoxLayout(BoxLayout.X_AXIS));
+        final Button sendButton = new Button(I18n.get(I18n.CMD_SEND));
+        sendButton.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent evt) {
+                doSend();
+            }
+        });
+        sendButton.getSelectedStyle().setBorder(
+            com.sun.lwuit.plaf.Border.createLineBorder(2, 0xFFFFFF));
+        inputField = new TextField("", 30);
+        inputField.setHint(I18n.get(I18n.INPUT_TITLE));
+        inputField.setNextFocusUp(chatContainer);
+        inputField.setNextFocusDown(sendButton);
+        sendButton.setNextFocusUp(inputField);
+        sendButton.setNextFocusLeft(sendButton);
+        inputField.getSelectedStyle().setBorder(
+            com.sun.lwuit.plaf.Border.createLineBorder(2, 0xFFFFFF));
+        inputRow.addComponent(sendButton);
+        inputRow.addComponent(inputField);
+        searchCheck = new CheckBox(I18n.get(I18n.SETTINGS_SEARCH));
+        searchCheck.setSelected(webSearch);
+        searchCheck.getSelectedStyle().setBorder(
+            com.sun.lwuit.plaf.Border.createLineBorder(2, 0xFFFFFF));
+        bottomBar.addComponent(inputRow);
+        bottomBar.addComponent(searchCheck);
+        chatForm.addComponent(BorderLayout.SOUTH, bottomBar);
+
+        exitCommand = new Command(I18n.get(I18n.CMD_EXIT));
+        settingsCommand = new Command(I18n.get(I18n.CMD_SETTINGS));
+        prevCommand = new Command(I18n.get(I18n.CMD_PREV));
+        nextCommand = new Command(I18n.get(I18n.CMD_NEXT));
+        inputCommand = new Command(I18n.get(I18n.INPUT_TITLE));
         chatForm.addCommand(exitCommand);
         chatForm.addCommand(settingsCommand);
-        chatForm.setCommandListener(this);
+        chatForm.addCommand(prevCommand);
+        chatForm.addCommand(nextCommand);
+        chatForm.addCommand(inputCommand);
+        chatForm.addCommandListener(this);
 
-        inputBox = new TextBox(I18n.get(I18n.INPUT_TITLE), "", 1000, TextField.ANY);
-        okCommand = new Command(I18n.get(I18n.CMD_OK), Command.OK, 1);
-        backCommand = new Command(I18n.get(I18n.CMD_BACK), Command.BACK, 2);
-        prevCommand = new Command(I18n.get(I18n.CMD_PREV), Command.HELP, 3);
-        nextCommand = new Command(I18n.get(I18n.CMD_NEXT), Command.STOP, 4);
-        inputBox.addCommand(okCommand);
-        inputBox.addCommand(backCommand);
-        inputBox.addCommand(prevCommand);
-        inputBox.addCommand(nextCommand);
-        inputBox.setCommandListener(this);
+        // OK/fire key jumps from chat area to input bar
+        chatForm.addGameKeyListener(Display.GAME_FIRE, new ActionListener() {
+            public void actionPerformed(ActionEvent evt) {
+                if (chatContainer.hasFocus()) {
+                    inputField.requestFocus();
+                }
+            }
+        });
 
         settingsForm = new Form(I18n.get(I18n.SETTINGS_TITLE));
-        hostField = new TextField(I18n.get(I18n.SETTINGS_HOST) + ": ", Settings.getHost(), 100, TextField.URL);
-        portField = new TextField(I18n.get(I18n.SETTINGS_PORT) + ": ", Settings.getPort(), 6, TextField.NUMERIC);
-        searchChoice = new ChoiceGroup(I18n.get(I18n.SETTINGS_SEARCH), ChoiceGroup.EXCLUSIVE,
-            new String[] { I18n.get(I18n.SETTINGS_YES), I18n.get(I18n.SETTINGS_NO) }, null);
-        searchChoice.setSelectedIndex(webSearch ? 0 : 1, true);
-        roundsField = new TextField(I18n.get(I18n.SETTINGS_MAX_ROUNDS) + ": ",
-            String.valueOf(maxSearchRounds), 2, TextField.NUMERIC);
-        settingsForm.append(hostField);
-        settingsForm.append(portField);
-        settingsForm.append(searchChoice);
-        settingsForm.append(roundsField);
-        saveCommand = new Command(I18n.get(I18n.CMD_SAVE), Command.OK, 1);
-        settingsBackCommand = new Command(I18n.get(I18n.CMD_BACK), Command.BACK, 2);
-        promptCommand = new Command(I18n.get(I18n.CMD_SET_PROMPT), Command.HELP, 3);
+        settingsForm.setLayout(new BoxLayout(BoxLayout.Y_AXIS));
+        hostField = new TextField(Settings.getHost());
+        hostField.setHint(I18n.get(I18n.SETTINGS_HOST));
+        hostField.setMaxSize(100);
+        hostField.setConstraint(TextField.URL);
+        portField = new TextField(Settings.getPort());
+        portField.setHint(I18n.get(I18n.SETTINGS_PORT));
+        portField.setMaxSize(6);
+        portField.setConstraint(TextField.NUMERIC);
+        String[] searchOptions = {
+            I18n.get(I18n.SETTINGS_YES),
+            I18n.get(I18n.SETTINGS_NO)
+        };
+        searchList = new com.sun.lwuit.ComboBox(searchOptions);
+        searchList.setSelectedIndex(webSearch ? 0 : 1);
+        roundsField = new TextField(String.valueOf(maxSearchRounds));
+        roundsField.setHint(I18n.get(I18n.SETTINGS_MAX_ROUNDS));
+        roundsField.setMaxSize(2);
+        roundsField.setConstraint(TextField.NUMERIC);
+        settingsForm.addComponent(new Label(" " + I18n.get(I18n.SETTINGS_HOST)));
+        settingsForm.addComponent(hostField);
+        settingsForm.addComponent(new Label(" " + I18n.get(I18n.SETTINGS_PORT)));
+        settingsForm.addComponent(portField);
+        settingsForm.addComponent(new Label(" " + I18n.get(I18n.SETTINGS_SEARCH)));
+        settingsForm.addComponent(searchList);
+        settingsForm.addComponent(new Label(" " + I18n.get(I18n.SETTINGS_MAX_ROUNDS)));
+        settingsForm.addComponent(roundsField);
+        saveCommand = new Command(I18n.get(I18n.CMD_SAVE));
+        settingsBackCommand = new Command(I18n.get(I18n.CMD_BACK));
+        promptCommand = new Command(I18n.get(I18n.CMD_SET_PROMPT));
         settingsForm.addCommand(saveCommand);
         settingsForm.addCommand(settingsBackCommand);
         settingsForm.addCommand(promptCommand);
-        settingsForm.setCommandListener(this);
+        settingsForm.addCommandListener(this);
 
-        promptBox = new TextBox(I18n.get(I18n.SETTINGS_PROMPT), systemPrompt, 2000, TextField.ANY);
-        promptOkCommand = new Command(I18n.get(I18n.CMD_SAVE), Command.OK, 1);
-        promptBackCommand = new Command(I18n.get(I18n.CMD_BACK), Command.BACK, 2);
-        promptResetCommand = new Command(I18n.get(I18n.CMD_RESET), Command.STOP, 3);
-        promptBox.addCommand(promptOkCommand);
-        promptBox.addCommand(promptBackCommand);
-        promptBox.addCommand(promptResetCommand);
-        promptBox.setCommandListener(this);
+        promptArea = new TextArea(systemPrompt, 10, 30);
+        promptDialog = new Dialog(I18n.get(I18n.SETTINGS_PROMPT));
+        promptDialog.setLayout(new BorderLayout());
+        promptDialog.addComponent(BorderLayout.CENTER, promptArea);
+        promptOkCommand = new Command(I18n.get(I18n.CMD_SAVE));
+        promptBackCommand = new Command(I18n.get(I18n.CMD_BACK));
+        promptResetCommand = new Command(I18n.get(I18n.CMD_RESET));
+        promptDialog.addCommand(promptOkCommand);
+        promptDialog.addCommand(promptBackCommand);
+        promptDialog.addCommand(promptResetCommand);
+        promptDialog.addCommandListener(this);
 
-        display.setCurrent(chatForm);
-        System.out.println("[MIDlet] constructor done");
+        chatForm.show();
+        System.out.println("[MIDlet] LWUIT constructor done");
     }
 
     public void startApp() {}
@@ -133,94 +196,91 @@ public class DeepSeekMIDlet extends MIDlet implements CommandListener, Runnable 
 
     public void destroyApp(boolean unconditional) {}
 
-    public void commandAction(Command c, Displayable d) {
-        if (d == promptBox) {
-            if (c == promptOkCommand) {
-                String text = promptBox.getString();
-                systemPrompt = text;
-                Settings.saveSystemPrompt(text);
-                appendChat(I18n.get(I18n.CHAT_SYSTEM), I18n.get(I18n.PROMPT_SAVED));
-                display.setCurrent(settingsForm);
-            } else if (c == promptResetCommand) {
-                systemPrompt = I18n.get(I18n.SYSTEM_PROMPT);
-                Settings.saveSystemPrompt("");
-                promptBox.setString(systemPrompt);
-                appendChat(I18n.get(I18n.CHAT_SYSTEM), I18n.get(I18n.PROMPT_RESET));
-                display.setCurrent(settingsForm);
-            } else if (c == promptBackCommand) {
-                promptBox.setString(systemPrompt);
-                display.setCurrent(settingsForm);
-            }
-        } else if (d == inputBox) {
-            if (c == okCommand) {
-                String text = inputBox.getString();
-                if (text != null && text.length() > 0) {
-                    addInputHistory(text);
-                    inputBox.setString("");
-                    historyPos = -1;
-                    display.setCurrent(chatForm);
-                    sendMessage(text);
+    private void doSend() {
+        if (running) return;
+        String text = inputField.getText();
+        if (text == null || text.length() == 0) return;
+        currentSearch = searchCheck.isSelected();
+        addInputHistory(text);
+        inputField.setText("");
+        historyPos = -1;
+        sendMessage(text);
+    }
+
+    public void actionPerformed(ActionEvent evt) {
+        Command cmd = evt.getCommand();
+
+        if (cmd == promptOkCommand) {
+            String text = promptArea.getText();
+            systemPrompt = text;
+            Settings.saveSystemPrompt(text);
+            appendChat(I18n.get(I18n.CHAT_SYSTEM), I18n.get(I18n.PROMPT_SAVED));
+
+        } else if (cmd == promptResetCommand) {
+            systemPrompt = I18n.get(I18n.SYSTEM_PROMPT);
+            Settings.saveSystemPrompt("");
+            promptArea.setText(systemPrompt);
+            appendChat(I18n.get(I18n.CHAT_SYSTEM), I18n.get(I18n.PROMPT_RESET));
+
+        } else if (cmd == promptBackCommand) {
+            promptArea.setText(systemPrompt);
+
+        } else if (cmd == saveCommand) {
+            String host = hostField.getText().trim();
+            String port = portField.getText().trim();
+            if (host.length() > 0 && port.length() > 0) {
+                Settings.save(host, port);
+                httpClient.setProxyUrl(Settings.getProxyUrl());
+                boolean newSearch = searchList.getSelectedIndex() == 0;
+                boolean changed = (newSearch != webSearch);
+                if (changed) {
+                    webSearch = newSearch;
+                    Settings.saveWebSearch(newSearch);
+                    searchCheck.setSelected(webSearch);
                 }
-            } else if (c == backCommand) {
-                inputBox.setString("");
-                historyPos = -1;
-                display.setCurrent(chatForm);
-            } else if (c == prevCommand) {
-                navigateHistory(true);
-            } else if (c == nextCommand) {
-                navigateHistory(false);
-            }
-        } else if (d == settingsForm) {
-            if (c == saveCommand) {
-                String host = hostField.getString().trim();
-                String port = portField.getString().trim();
-                if (host.length() > 0 && port.length() > 0) {
-                    Settings.save(host, port);
-                    httpClient.setProxyUrl(Settings.getProxyUrl());
-                    boolean newSearch = searchChoice.isSelected(0);
-                    boolean changed = (newSearch != webSearch);
-                    if (changed) {
-                        webSearch = newSearch;
-                        Settings.saveWebSearch(newSearch);
-                    }
-                    int rounds = parseInt(roundsField.getString());
-                    if (rounds >= 1 && rounds <= 99) {
-                        maxSearchRounds = rounds;
-                        Settings.saveMaxSearchRounds(rounds);
-                    }
-                    appendChat(I18n.get(I18n.CHAT_SYSTEM), I18n.get(I18n.SETTINGS_SAVED));
-                    if (changed) {
-                        appendChat(I18n.get(I18n.CHAT_SYSTEM),
-                            I18n.get(I18n.SETTINGS_SEARCH) + " [" +
-                            I18n.get(webSearch ? I18n.SETTINGS_YES : I18n.SETTINGS_NO) + "]");
-                    }
+                int rounds = parseInt(roundsField.getText());
+                if (rounds >= 1 && rounds <= 99) {
+                    maxSearchRounds = rounds;
+                    Settings.saveMaxSearchRounds(rounds);
                 }
-                display.setCurrent(chatForm);
-            } else if (c == settingsBackCommand) {
-                hostField.setString(Settings.getHost());
-                portField.setString(Settings.getPort());
-                searchChoice.setSelectedIndex(Settings.getWebSearch() ? 0 : 1, true);
-                roundsField.setString(String.valueOf(Settings.getMaxSearchRounds()));
-                display.setCurrent(chatForm);
-            } else if (c == promptCommand) {
-                promptBox.setString(systemPrompt);
-                display.setCurrent(promptBox);
-            }
-        } else if (d == chatForm) {
-            if (c == sendCommand) {
-                if (running) {
-                    return;
+                appendChat(I18n.get(I18n.CHAT_SYSTEM), I18n.get(I18n.SETTINGS_SAVED));
+                if (changed) {
+                    appendChat(I18n.get(I18n.CHAT_SYSTEM),
+                        I18n.get(I18n.SETTINGS_SEARCH) + " [" +
+                        I18n.get(webSearch ? I18n.SETTINGS_YES : I18n.SETTINGS_NO) + "]");
                 }
-                display.setCurrent(inputBox);
-            } else if (c == settingsCommand) {
-                hostField.setString(Settings.getHost());
-                portField.setString(Settings.getPort());
-                searchChoice.setSelectedIndex(webSearch ? 0 : 1, true);
-                roundsField.setString(String.valueOf(maxSearchRounds));
-                display.setCurrent(settingsForm);
-            } else if (c == exitCommand) {
-                notifyDestroyed();
             }
+            chatForm.show();
+
+        } else if (cmd == settingsBackCommand) {
+            hostField.setText(Settings.getHost());
+            portField.setText(Settings.getPort());
+            searchList.setSelectedIndex(Settings.getWebSearch() ? 0 : 1);
+            roundsField.setText(String.valueOf(Settings.getMaxSearchRounds()));
+            chatForm.show();
+
+        } else if (cmd == promptCommand) {
+            promptArea.setText(systemPrompt);
+            promptDialog.show();
+
+        } else if (cmd == settingsCommand) {
+            hostField.setText(Settings.getHost());
+            portField.setText(Settings.getPort());
+            searchList.setSelectedIndex(webSearch ? 0 : 1);
+            roundsField.setText(String.valueOf(maxSearchRounds));
+            settingsForm.show();
+
+        } else if (cmd == prevCommand) {
+            navigateHistory(true);
+
+        } else if (cmd == nextCommand) {
+            navigateHistory(false);
+
+        } else if (cmd == inputCommand) {
+            inputField.requestFocus();
+
+        } else if (cmd == exitCommand) {
+            notifyDestroyed();
         }
     }
 
@@ -239,31 +299,27 @@ public class DeepSeekMIDlet extends MIDlet implements CommandListener, Runnable 
 
     private void navigateHistory(boolean prev) {
         int size = inputHistory.size();
-        if (size == 0) {
-            return;
-        }
+        if (size == 0) return;
         if (historyPos == -1) {
             historyPos = prev ? size - 1 : 0;
         } else {
             if (prev) {
                 historyPos--;
-                if (historyPos < 0) {
-                    historyPos = size - 1;
-                }
+                if (historyPos < 0) historyPos = size - 1;
             } else {
                 historyPos++;
-                if (historyPos >= size) {
-                    historyPos = 0;
-                }
+                if (historyPos >= size) historyPos = 0;
             }
         }
-        String text = (String) inputHistory.elementAt(historyPos);
-        inputBox.setString(text);
+        inputField.setText((String) inputHistory.elementAt(historyPos));
     }
 
     private void sendMessage(String text) {
         currentUserMessage = text;
-        appendChat(I18n.get(I18n.CHAT_YOU), currentUserMessage);
+        String label = currentSearch
+            ? (I18n.get(I18n.CHAT_YOU) + " [" + I18n.get(I18n.SETTINGS_SEARCH) + "]")
+            : I18n.get(I18n.CHAT_YOU);
+        appendChat(label, currentUserMessage);
         addHistoryMessage("user", currentUserMessage);
         chatForm.setTitle(I18n.get(I18n.TITLE_THINKING));
         running = true;
@@ -277,19 +333,15 @@ public class DeepSeekMIDlet extends MIDlet implements CommandListener, Runnable 
             response = httpClient.post(requestBody);
         } catch (IOException e) {
             String errMsg = e.getMessage();
-            if (errMsg == null) {
-                errMsg = e.toString();
-            }
+            if (errMsg == null) errMsg = e.toString();
             response = "{\"error\":{\"message\":\"" + escapeJson(errMsg) + "\"}}";
         } catch (Exception e) {
             String errMsg = e.getMessage();
-            if (errMsg == null) {
-                errMsg = e.toString();
-            }
+            if (errMsg == null) errMsg = e.toString();
             response = "{\"error\":{\"message\":\"" + escapeJson(errMsg) + "\"}}";
         }
         final String finalResponse = response;
-        display.callSerially(new Runnable() {
+        Display.getInstance().callSerially(new Runnable() {
             public void run() {
                 handleResponse(finalResponse);
                 running = false;
@@ -376,16 +428,40 @@ public class DeepSeekMIDlet extends MIDlet implements CommandListener, Runnable 
     }
 
     private void appendFormItem(final String text) {
-        display.callSerially(new Runnable() {
+        Runnable r = new Runnable() {
             public void run() {
-                while (chatForm.size() > 0 && chatForm.size() >= MAX_FORM_ITEMS) {
-                    chatForm.delete(chatForm.size() - 1);
+                while (chatContainer.getComponentCount() >= MAX_FORM_ITEMS) {
+                    chatContainer.removeComponent(
+                        chatContainer.getComponentAt(
+                            chatContainer.getComponentCount() - 1));
                 }
-                StringItem item = new StringItem(null, "\n" + text);
-                item.setLayout(Item.LAYOUT_2);
-                chatForm.insert(0, item);
+                chatContainer.addComponent(0, createMessageLabel("\n" + text));
+                chatForm.revalidate();
             }
-        });
+        };
+        if (Display.getInstance().isEdt()) {
+            r.run();
+        } else {
+            Display.getInstance().callSerially(r);
+        }
+    }
+
+    private TextArea createMessageLabel(String text) {
+        TextArea ta = new TextArea(text);
+        ta.setEditable(false);
+        ta.setFocusable(false);
+        ta.setUIID("Label");
+        return ta;
+    }
+
+    private void addDirectly(String role, String text) {
+        while (chatContainer.getComponentCount() >= MAX_FORM_ITEMS) {
+            chatContainer.removeComponent(
+                chatContainer.getComponentAt(
+                    chatContainer.getComponentCount() - 1));
+        }
+        chatContainer.addComponent(0, createMessageLabel(
+            "\n" + role + " [" + nowTime() + "]:\n" + text));
     }
 
     private String buildRequestBody(String userMessage) {
@@ -407,7 +483,7 @@ public class DeepSeekMIDlet extends MIDlet implements CommandListener, Runnable 
 
         sb.append("],\"stream\":false");
 
-        if (webSearch) {
+        if (currentSearch) {
             sb.append(",\"web_search\":true");
             sb.append(",\"max_search_rounds\":").append(maxSearchRounds);
         }
@@ -427,9 +503,7 @@ public class DeepSeekMIDlet extends MIDlet implements CommandListener, Runnable 
     }
 
     private String escapeJson(String text) {
-        if (text == null) {
-            return "";
-        }
+        if (text == null) return "";
         StringBuffer sb = new StringBuffer();
         int len = text.length();
         for (int i = 0; i < len; i++) {

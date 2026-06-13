@@ -55,3 +55,4 @@ replay_pid*
 
 # NetBeans project private data
 nbproject/private/
+/dist/
