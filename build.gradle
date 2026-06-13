@@ -143,7 +143,9 @@ tasks.register('runEmulator') {
                     "$meHome/devices/microemu-device-resizable.jar",
                     "$meHome/devices/microemu-device-default.jar",
                     cldcJar,
-                    midpJar
+                    midpJar,
+                    lwuitJar,
+                    midpIoJar
             )
             args = [jar.archiveFile.get().asFile.absolutePath]
         }
@@ -183,7 +185,9 @@ tasks.register('runEmulatorFast') {
                     "$meHome/devices/microemu-device-resizable.jar",
                     "$meHome/devices/microemu-device-default.jar",
                     cldcJar,
-                    midpJar
+                    midpJar,
+                    lwuitJar,
+                    midpIoJar
             )
             args = [tasks.jarRaw.archiveFile.get().asFile.absolutePath]
         }
