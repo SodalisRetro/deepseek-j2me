@@ -29,6 +29,7 @@ public class HttpClient {
             conn.setRequestMethod(HttpConnection.POST);
             conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
             conn.setRequestProperty("Accept", "application/json");
+            conn.setRequestProperty("Accept-Encoding", "gzip");
 
             byte[] bodyBytes = toUtf8(jsonBody);
 
@@ -51,6 +52,12 @@ public class HttpClient {
                 bos.write(buf, 0, n);
             }
             byte[] respBytes = bos.toByteArray();
+
+            String encoding = conn.getEncoding();
+            if ("gzip".equals(encoding)) {
+                respBytes = J2MEZipUtil.gunzip(respBytes);
+            }
+
             return fromUtf8(respBytes);
         } finally {
             if (os != null) {

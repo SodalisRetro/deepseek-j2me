@@ -56,3 +56,6 @@ replay_pid*
 # NetBeans project private data
 nbproject/private/
 /dist/
+
+# Node.js proxy
+proxy/node_modules/

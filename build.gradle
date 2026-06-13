@@ -17,6 +17,7 @@ ext {
     meJar   = "$meHome/microemulator.jar"
     lwuitJar = file('lib/LWUIT_MIDP.jar')
     midpIoJar = file('lib/MIDP_IO.jar')
+    jzlibJar = file('lib/JZlibJ2ME.jar')
 }
 
 // All WTK lib jars for bootclasspath & preverify
@@ -24,7 +25,7 @@ def wtkJars() {
     fileTree(dir: wtkJarDir, include: '*.jar').collect { it.absolutePath }.join(File.pathSeparator)
 }
 
-def allClasspath = files(cldcJar, midpJar, lwuitJar, midpIoJar, fileTree(wtkJarDir))
+def allClasspath = files(cldcJar, midpJar, lwuitJar, midpIoJar, jzlibJar, fileTree(wtkJarDir))
 
 // ============================================================
 // Compilation: target CLDC-1.1 / MIDP-2.0
@@ -147,7 +148,8 @@ tasks.register('runEmulator') {
                     midpJar,
                     "$wtkHome/lib/mmapi.jar",
                     lwuitJar,
-                    midpIoJar
+                    midpIoJar,
+                    jzlibJar
             )
             jvmArgs '-Dsun.java2d.d3d=false'
             args = [jar.archiveFile.get().asFile.absolutePath]
@@ -164,6 +166,7 @@ tasks.register('jarRaw', Jar) {
     from sourceSets.main.resources
     from zipTree(lwuitJar)
     from zipTree(midpIoJar)
+    from zipTree(jzlibJar)
     eachFile { FileCopyDetails fcp ->
         if (fcp.path.startsWith('META-INF/') && fcp.path != 'META-INF/MANIFEST.MF') {
             fcp.exclude()
@@ -200,7 +203,8 @@ tasks.register('runEmulatorFast') {
                     midpJar,
                     "$wtkHome/lib/mmapi.jar",
                     lwuitJar,
-                    midpIoJar
+                    midpIoJar,
+                    jzlibJar
             )
             jvmArgs '-Dsun.java2d.d3d=false'
             args = [tasks.jarRaw.archiveFile.get().asFile.absolutePath]

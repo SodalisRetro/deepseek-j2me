@@ -1,11 +1,20 @@
 const http = require('http');
 const https = require('https');
+const zlib = require('zlib');
+const { marked } = require('marked');
+
+// Configure marked for basic HTML4 output (no typographer, no breaks)
+marked.setOptions({
+  gfm: true,
+  breaks: true,
+  pedantic: false
+});
 
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || '';
 const PROXY_PORT = parseInt(process.env.PROXY_PORT || '8080', 10);
 const DEFAULT_MAX_SEARCH_ROUNDS = 15;
 
-var SEARCH_TOOL = {
+const SEARCH_TOOL = {
     type: 'function',
     function: {
         name: 'search_page',
@@ -23,7 +32,7 @@ var SEARCH_TOOL = {
     }
 };
 
-var FETCH_TOOL = {
+const FETCH_TOOL = {
     type: 'function',
     function: {
         name: 'fetch_page',
@@ -76,7 +85,7 @@ http.createServer((req, res) => {
             res.end('Empty body');
             return;
         }
-        handleRequest(body, res);
+        handleRequest(body, req.headers, res);
     });
 }).listen(PROXY_PORT, function () {
     console.log('DeepSeek J2ME proxy running on http://localhost:' + PROXY_PORT);
@@ -89,7 +98,7 @@ function serverTimeContext() {
            ', year: ' + now.getFullYear() + ')';
 }
 
-function handleRequest(body, res) {
+function handleRequest(body, headers, res) {
     var enableSearch = false;
     var maxRounds = DEFAULT_MAX_SEARCH_ROUNDS;
     var cleanBody = body;
@@ -149,15 +158,7 @@ function handleRequest(body, res) {
             '- Do not retry failed searches. Move on to known URLs instead.\n' +
             '- NEVER output JSON, tool_calls, or raw HTML in your answer. ' +
             'ALWAYS respond in plain natural language. ' +
-            'Extract the answer from the HTML, do not quote it.\n' +
-            '\n' +
-            '=== OUTPUT FORMAT (J2ME display constraint) ===\n' +
-            'Output plain text only. Do NOT use ANY Markdown formatting: ' +
-            'no **bold**, no `code`, no bullet lists with -, no > quotes, ' +
-            'no # headings, and especially NO PIPE TABLES with | and ---. ' +
-            'Instead, present structured data as labeled lines (title: value) ' +
-            'or flat paragraphs. Use plain numbered lists (1. 2. 3.) if needed. ' +
-            'Keep responses concise.';
+            'Extract the answer from the HTML, do not quote it.\n';
 
         messages.unshift({
             role: 'system',
@@ -194,15 +195,13 @@ function deepSearchLoop(json, res, round, maxRounds) {
         try {
             parsed = JSON.parse(responseBody);
         } catch (e) {
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(responseBody);
+            writeHtml(res, 200, responseBody);
             return;
         }
 
         var choices = parsed.choices;
         if (!choices || choices.length === 0) {
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(stripResponseMarkdown(responseBody));
+            writeHtml(res, 200, responseBody);
             return;
         }
 
@@ -228,15 +227,13 @@ function deepSearchLoop(json, res, round, maxRounds) {
                         res.end(JSON.stringify({ error: { message: 'Proxy error: ' + err2.message } }));
                         return;
                     }
-                    res.writeHead(sc2, { 'Content-Type': 'application/json' });
-                    res.end(stripResponseMarkdown(rb2));
+                    writeHtml(res, sc2, rb2);
                 });
                 return;
             }
             console.log('Deep search complete after ' + round + ' tool rounds');
             console.log('--- /deep search ---');
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(stripResponseMarkdown(responseBody));
+            writeHtml(res, 200, responseBody);
             return;
         }
 
@@ -254,8 +251,7 @@ function deepSearchLoop(json, res, round, maxRounds) {
                             res.end(JSON.stringify({ error: { message: 'Proxy error: ' + err2.message } }));
                             return;
                         }
-                        res.writeHead(sc2, { 'Content-Type': 'application/json' });
-                        res.end(stripResponseMarkdown(rb2));
+                        writeHtml(res, sc2, rb2);
                     });
                 });
                 return;
@@ -271,26 +267,22 @@ function deepSearchLoop(json, res, round, maxRounds) {
                         res.end(JSON.stringify({ error: { message: 'Proxy error: ' + err2.message } }));
                         return;
                     }
-                    res.writeHead(sc2, { 'Content-Type': 'application/json' });
-                    res.end(stripResponseMarkdown(rb2));
+                    writeHtml(res, sc2, rb2);
                 });
             } else {
-                res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(stripResponseMarkdown(responseBody));
+                writeHtml(res, 200, responseBody);
             }
             return;
         }
 
         if (finishReason !== 'tool_calls') {
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(stripResponseMarkdown(responseBody));
+            writeHtml(res, 200, responseBody);
             return;
         }
 
         var toolCalls = message.tool_calls;
         if (!toolCalls || toolCalls.length === 0) {
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(stripResponseMarkdown(responseBody));
+            writeHtml(res, 200, responseBody);
             return;
         }
 
@@ -559,46 +551,28 @@ function stripHtml(str) {
               .replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-function stripMarkdown(text) {
-    if (!text) return text;
-
-    text = text.replace(/^#{1,6}\s+/gm, '');
-
-    text = text.replace(/\*\*\*(.+?)\*\*\*/g, '$1');
-    text = text.replace(/\*\*(.+?)\*\*/g, '$1');
-    text = text.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '$1');
-
-    text = text.replace(/`{3}[\s\S]*?`{3}/g, function (m) {
-        return '\n' + m.replace(/`{3}\w*\n?/g, '').replace(/`{3}/g, '') + '\n';
-    });
-    text = text.replace(/`(.+?)`/g, '$1');
-
-    text = text.replace(/^[*-]\s+/gm, '\u2022 ');
-
-    text = text.replace(/^>\s?/gm, '| ');
-
-    text = text.replace(/\[(.+?)\]\(.+?\)/g, '$1');
-
-    text = text.replace(/^(\d+)\.\s+/gm, '$1. ');
-
-    text = text.replace(/\n{3,}/g, '\n\n');
-
-    return text.trim();
+function markdownToHtml(markdown) {
+    if (!markdown) return '';
+    // Convert Markdown to HTML using marked
+    var rawHtml = marked.parse(markdown);
+    // Wrap in minimal HTML4 document for LWUIT HTMLComponent
+    return '<html><body>' + rawHtml + '</body></html>';
 }
 
-function stripResponseMarkdown(body) {
+function convertResponseToHtml(responseBody) {
     try {
-        var json = JSON.parse(body);
+        var json = JSON.parse(responseBody);
         var choices = json.choices;
         if (choices && choices.length > 0) {
             var msg = choices[0].message;
             if (msg && msg.content) {
-                msg.content = stripMarkdown(msg.content);
+                // Replace \n\n with actual newlines for marked to process
+                msg.content = markdownToHtml(msg.content);
             }
         }
         return JSON.stringify(json);
     } catch (e) {
-        return body;
+        return responseBody;
     }
 }
 
@@ -645,9 +619,24 @@ function sendToDeepSeek(body, res) {
             res.end(JSON.stringify({ error: { message: 'Proxy error: ' + err.message } }));
             return;
         }
+        writeHtml(res, statusCode, responseBody);
+    });
+}
 
-        var clean = stripResponseMarkdown(responseBody);
-        res.writeHead(statusCode, { 'Content-Type': 'application/json' });
-        res.end(clean);
+function writeHtml(res, statusCode, responseBody) {
+    var htmlResponse = convertResponseToHtml(responseBody);
+
+    zlib.gzip(Buffer.from(htmlResponse, 'utf8'), function (err, compressed) {
+        if (err) {
+            // Fall back to uncompressed
+            res.writeHead(statusCode, { 'Content-Type': 'application/json' });
+            res.end(htmlResponse);
+            return;
+        }
+        res.writeHead(statusCode, {
+            'Content-Type': 'application/json',
+            'Content-Encoding': 'gzip'
+        });
+        res.end(compressed);
     });
 }

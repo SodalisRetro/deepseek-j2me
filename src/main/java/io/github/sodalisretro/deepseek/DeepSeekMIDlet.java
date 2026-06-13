@@ -12,6 +12,7 @@ import com.sun.lwuit.TextArea;
 import com.sun.lwuit.TextField;
 import com.sun.lwuit.events.ActionEvent;
 import com.sun.lwuit.events.ActionListener;
+import com.sun.lwuit.html.HTMLComponent;
 import com.sun.lwuit.layouts.BorderLayout;
 import com.sun.lwuit.layouts.BoxLayout;
 import java.io.IOException;
@@ -376,7 +377,7 @@ public class DeepSeekMIDlet extends MIDlet implements ActionListener, Runnable {
                             if (message instanceof Hashtable) {
                                 String content = (String) ((Hashtable) message).get("content");
                                 if (content != null) {
-                                    appendChat("DeepSeek", content);
+                                    appendHtmlChat("DeepSeek", content);
                                     addHistoryMessage("assistant", content);
                                     chatForm.setTitle(I18n.get(I18n.TITLE_IDLE));
                                     return;
@@ -396,6 +397,11 @@ public class DeepSeekMIDlet extends MIDlet implements ActionListener, Runnable {
 
     private void appendChat(String role, String text) {
         appendFormItem(role + " [" + nowTime() + "]:\n" + text);
+    }
+
+    private void appendHtmlChat(String role, String html) {
+        String header = role + " [" + nowTime() + "]:";
+        appendHtmlItem(header, html);
     }
 
     private String nowTime() {
@@ -452,6 +458,31 @@ public class DeepSeekMIDlet extends MIDlet implements ActionListener, Runnable {
         ta.setFocusable(false);
         ta.setUIID("Label");
         return ta;
+    }
+
+    private void appendHtmlItem(final String header, final String html) {
+        Runnable r = new Runnable() {
+            public void run() {
+                while (chatContainer.getComponentCount() >= MAX_FORM_ITEMS) {
+                    chatContainer.removeComponent(
+                        chatContainer.getComponentAt(
+                            chatContainer.getComponentCount() - 1));
+                }
+                Container item = new Container(new BoxLayout(BoxLayout.Y_AXIS));
+                Label headerLabel = new Label(" " + header);
+                item.addComponent(headerLabel);
+                HTMLComponent htmlComp = new HTMLComponent();
+                htmlComp.setBodyText(html);
+                item.addComponent(htmlComp);
+                chatContainer.addComponent(0, item);
+                chatForm.revalidate();
+            }
+        };
+        if (Display.getInstance().isEdt()) {
+            r.run();
+        } else {
+            Display.getInstance().callSerially(r);
+        }
     }
 
     private void addDirectly(String role, String text) {
