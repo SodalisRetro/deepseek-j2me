@@ -2,33 +2,110 @@ plugins {
     id 'java'
 }
 
-group 'io.github.sodalisretro'
-version '1.0-SNAPSHOT'
+group = 'io.github.sodalisretro'
+version = '0.1.0'
 
-dependencies {
-    implementation files('microemulator-2.0.4/microemulator.jar')
+// ============================================================
+// WTK, MicroEmulator & LWUIT paths
+// ============================================================
+ext {
+    wtkHome = 'C:/WTK2.5.2'
+    meHome = file('microemulator-2.0.4')
+    cldcJar = "$meHome/lib/cldcapi11.jar"
+    midpJar = "$meHome/lib/midpapi20.jar"
+    meJar   = "$meHome/microemulator.jar"
+    lwuitJar = file('lib/LWUIT_MIDP.jar')
+    midpIoJar = file('lib/MIDP_IO.jar')
+}
+
+// ============================================================
+// Compilation: target CLDC-1.1 / MIDP-2.0
+// ============================================================
+java {
+    sourceCompatibility = JavaVersion.VERSION_1_3
+    targetCompatibility = JavaVersion.VERSION_1_3
+}
+
+compileJava {
+    options.encoding = 'UTF-8'
+    options.compilerArgs = [
+        '-bootclasspath',
+        files(cldcJar, midpJar).asPath
+    ]
+    classpath = files(cldcJar, midpJar, lwuitJar, midpIoJar)
+    // Output raw classes to a separate dir (not the default)
+    // so they never end up in the final jar
+    destinationDir = file("${buildDir}/classes-raw")
+}
+
+// ============================================================
+// Preverify — CLDC MANDATORY step
+// ============================================================
+def preverifiedDir = layout.buildDirectory.dir('preverified').get().asFile
+
+tasks.register('preverify') {
+    dependsOn classes
+    description = 'Run WTK preverify on compiled classes (CLDC requirement)'
+
+    doFirst {
+        delete preverifiedDir
+        preverifiedDir.mkdirs()
+    }
+
+    doLast {
+        exec {
+            workingDir = projectDir
+            executable = "$wtkHome/bin/preverify.exe"
+            args = [
+                    '-classpath', [cldcJar, midpJar, lwuitJar, midpIoJar, compileJava.destinationDir.absolutePath].join(';'),
+                    '-d',          preverifiedDir.absolutePath,
+                    compileJava.destinationDir.absolutePath
+            ]
+        }
+    }
+}
+
+// ============================================================
+// Copy preverified classes into main output dir so the Jar
+// task picks them up automatically (no duplicate issue)
+// ============================================================
+tasks.register('prepareJarClasses') {
+    dependsOn preverify
+    description = 'Copy preverified classes to main output directory'
+    doLast {
+        delete sourceSets.main.output.classesDirs.singleFile
+        copy {
+            from preverifiedDir
+            into sourceSets.main.output.classesDirs.singleFile
+        }
+    }
 }
 
 jar {
+    dependsOn prepareJarClasses
+    description = 'Build MIDlet jar from preverified classes'
+
     manifest {
         attributes(
-                'MIDlet-Vendor': MIDletVendor,
-                'MIDlet-Version': MIDletVersion,
+                'MIDlet-Name':          MIDletName,
+                'MIDlet-Version':       MIDletVersion,
+                'MIDlet-Vendor':        MIDletVendor,
+                'MIDlet-1':             "${MIDletName}, ${icon}, ${mainClass}",
                 'MicroEdition-Configuration': MicroEditionConfiguration,
-                'MIDlet-Name': MIDletName,
-                'MIDlet-Description': MIDletDescription,
                 'MicroEdition-Profile': MicroEditionProfile,
-                'MIDlet-1': MIDletName + ',' + icon + ',' + mainClass
+                'MIDlet-Description':   MIDletDescription
         )
     }
 }
 
+// ============================================================
+// Generate JAD descriptor (runs after jar)
+// ============================================================
 tasks.register('generateJad') {
     dependsOn jar
     doLast {
-        def jarFile = jar.getArchiveFile().get().asFile
+        def jarFile = jar.archiveFile.get().asFile
         def jadFile = new File(jarFile.parentFile, jarFile.name.replace('.jar', '.jad'))
-
         def jadProperties = [
                 'MIDlet-Name'                : MIDletName,
                 'MIDlet-Version'             : MIDletVersion,
@@ -40,32 +117,32 @@ tasks.register('generateJad') {
                 'MIDlet-Jar-URL'             : jarFile.name,
                 'MIDlet-Jar-Size'            : jarFile.length()
         ]
-
         jadFile.text = jadProperties.collect { key, value -> "${key}: ${value}" }.join('\n') + '\n'
+        logger.lifecycle "JAD generated: ${jadFile.absolutePath}"
     }
 }
 
+// ============================================================
+// Run in MicroEmulator
+// ============================================================
 tasks.register('runEmulator') {
     dependsOn jar
     doLast {
         javaexec {
             mainClass = 'org.microemu.app.Main'
-            classpath = files("./microemulator-2.0.4/microemulator.jar")
-            args = [
-                    jar.getArchiveFile().get().asFile.getAbsolutePath()
-            ]
+            classpath = files(
+                    meJar,
+                    "$meHome/devices/microemu-device-resizable.jar",
+                    "$meHome/devices/microemu-device-default.jar",
+                    cldcJar,
+                    midpJar
+            )
+            args = [jar.archiveFile.get().asFile.absolutePath]
         }
     }
 }
 
-java {
-    sourceCompatibility = JavaVersion.VERSION_1_2
-    targetCompatibility = JavaVersion.VERSION_1_1
-}
-
-tasks.withType(JavaCompile).configureEach {
-    options.encoding = 'UTF-8'
-}
-
-// Auto-generate .jad after jar built
+// ============================================================
+// Shortcut: build = jar + jad
+// ============================================================
 build.dependsOn generateJad

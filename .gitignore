@@ -49,3 +49,9 @@ replay_pid*
 
 .idea
 !microemulator-2.0.4/**/*.jar
+
+# Project libraries (LWUIT, etc.)
+!lib/*.jar
+
+# NetBeans project private data
+nbproject/private/
