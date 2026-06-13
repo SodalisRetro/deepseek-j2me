@@ -16,6 +16,7 @@ ext {
     meJar   = "$meHome/microemulator.jar"
     lwuitJar = file('lib/LWUIT_MIDP.jar')
     midpIoJar = file('lib/MIDP_IO.jar')
+    jsr184Jar = file("$wtkHome/lib/jsr184.jar")
 }
 
 // ============================================================
@@ -32,7 +33,7 @@ compileJava {
         '-bootclasspath',
         files(cldcJar, midpJar).asPath
     ]
-    classpath = files(cldcJar, midpJar, lwuitJar, midpIoJar)
+    classpath = files(cldcJar, midpJar, lwuitJar, midpIoJar, jsr184Jar)
     // Output raw classes to a separate dir (not the default)
     // so they never end up in the final jar
     destinationDir = file("${buildDir}/classes-raw")
@@ -57,7 +58,7 @@ tasks.register('preverify') {
             workingDir = projectDir
             executable = "$wtkHome/bin/preverify.exe"
             args = [
-                    '-classpath', [cldcJar, midpJar, lwuitJar, midpIoJar, compileJava.destinationDir.absolutePath].join(';'),
+                    '-classpath', [cldcJar, midpJar, lwuitJar, midpIoJar, jsr184Jar, compileJava.destinationDir.absolutePath].join(';'),
                     '-d',          preverifiedDir.absolutePath,
                     compileJava.destinationDir.absolutePath
             ]
