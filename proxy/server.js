@@ -552,10 +552,17 @@ function stripHtml(str) {
 
 function markdownToHtml(markdown) {
     if (!markdown) return '';
-    // Convert Markdown to HTML using marked
     var rawHtml = marked.parse(markdown);
-    // Wrap in minimal HTML4 document for LWUIT HTMLComponent
-    return '<html><body>' + rawHtml + '</body></html>';
+    // LWUIT HTMLComponent only supports basic HTML4 tags
+    // Remove tags known to be problematic
+    rawHtml = rawHtml.replace(/<table[\s\S]*?<\/table>/gi, '<p>[table]</p>');
+    rawHtml = rawHtml.replace(/<img[^>]*>/gi, '');
+    rawHtml = rawHtml.replace(/<svg[\s\S]*?<\/svg>/gi, '');
+    rawHtml = rawHtml.replace(/<video[\s\S]*?<\/video>/gi, '');
+    rawHtml = rawHtml.replace(/<script[\s\S]*?<\/script>/gi, '');
+    rawHtml = rawHtml.replace(/<style[\s\S]*?<\/style>/gi, '');
+    rawHtml = rawHtml.replace(/<hr\s*\/?>/gi, '<br>');
+    return '<div style="padding:2px 6px; margin:2px 0">' + rawHtml + '</div>';
 }
 
 function convertResponseToHtml(responseBody) {

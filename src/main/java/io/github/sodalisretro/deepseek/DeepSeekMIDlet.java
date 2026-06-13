@@ -130,12 +130,10 @@ public class DeepSeekMIDlet extends MIDlet implements ActionListener, Runnable {
         chatForm.addCommand(inputCommand);
         chatForm.addCommandListener(this);
 
-        // OK/fire key jumps from chat area to input bar
+        // OK/fire key jumps to input bar
         chatForm.addGameKeyListener(Display.GAME_FIRE, new ActionListener() {
             public void actionPerformed(ActionEvent evt) {
-                if (chatContainer.hasFocus()) {
-                    inputField.requestFocus();
-                }
+                inputField.requestFocus();
             }
         });
 
@@ -281,7 +279,11 @@ public class DeepSeekMIDlet extends MIDlet implements ActionListener, Runnable {
             inputField.requestFocus();
 
         } else if (cmd == exitCommand) {
-            notifyDestroyed();
+            if (inputField.hasFocus()) {
+                notifyDestroyed();
+            } else {
+                inputField.requestFocus();
+            }
         }
     }
 
@@ -469,10 +471,21 @@ public class DeepSeekMIDlet extends MIDlet implements ActionListener, Runnable {
                             chatContainer.getComponentCount() - 1));
                 }
                 Container item = new Container(new BoxLayout(BoxLayout.Y_AXIS));
+                item.getStyle().setMargin(0, 0, 1, 1);
                 Label headerLabel = new Label(" " + header);
                 item.addComponent(headerLabel);
                 HTMLComponent htmlComp = new HTMLComponent();
-                htmlComp.setBodyText(html);
+                try {
+                    htmlComp.setBodyText(html);
+                } catch (Exception e) {
+                    TextArea fallback = new TextArea(header + "\n" + html);
+                    fallback.setEditable(false);
+                    fallback.setFocusable(false);
+                    item.addComponent(fallback);
+                    chatContainer.addComponent(0, item);
+                    chatForm.revalidate();
+                    return;
+                }
                 item.addComponent(htmlComp);
                 chatContainer.addComponent(0, item);
                 chatForm.revalidate();
