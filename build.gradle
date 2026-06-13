@@ -137,6 +137,7 @@ tasks.register('runEmulator') {
     dependsOn jar
     doLast {
         javaexec {
+            executable = 'C:\\Program Files\\Microsoft\\jdk-21.0.7.6-hotspot\\bin\\java.exe'
             mainClass = 'org.microemu.app.Main'
             classpath = files(
                     meJar,
@@ -189,6 +190,7 @@ tasks.register('runEmulatorFast') {
     dependsOn jarRaw
     doLast {
         javaexec {
+            executable = 'C:\\Program Files\\Microsoft\\jdk-21.0.7.6-hotspot\\bin\\java.exe'
             mainClass = 'org.microemu.app.Main'
             classpath = files(
                     meJar,
