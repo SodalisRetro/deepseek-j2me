@@ -1,11 +1,50 @@
 const http = require('http');
 const https = require('https');
+const { marked } = require('marked');
+
+// Configure marked for LWUIT-compatible HTML output
+// LWUIT HTML parser is based on XHTML-MP 1.0 (strict XML)
+marked.setOptions({
+  gfm: true,
+  breaks: true,
+  pedantic: false,
+  xhtml: true
+});
+
+// Override individual renderers, keeping defaults for everything else
+marked.use({
+  renderer: {
+    br: function() { return '<br/>\n'; },
+    hr: function() { return '<br/>\n'; },
+    image: function() { return ''; },
+    link: function(token) {
+        var href = (token.href || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        var text = (token.text || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        if (href.indexOf('http://') !== 0 && href.indexOf('https://') !== 0) {
+            return text;
+        }
+        return '<a style="color:#4488ff;" href="' + href + '">' + text + '</a> <font color="#666666">(' + href + ')</font>';
+      }
+  }
+});
 
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || '';
 const PROXY_PORT = parseInt(process.env.PROXY_PORT || '8080', 10);
+const DEBUG = process.env.DEBUG_PROXY === 'true' || process.argv.indexOf('--debug') !== -1;
 const DEFAULT_MAX_SEARCH_ROUNDS = 15;
 
-var SEARCH_TOOL = {
+function logDebug(tag, msg) {
+    if (!DEBUG) return;
+    var ts = new Date().toISOString().substring(11, 23);
+    console.log('[' + ts + '] [' + padTag(tag) + '] ' + msg);
+}
+
+function padTag(tag) {
+    while (tag.length < 18) tag += ' ';
+    return tag;
+}
+
+const SEARCH_TOOL = {
     type: 'function',
     function: {
         name: 'search_page',
@@ -23,7 +62,7 @@ var SEARCH_TOOL = {
     }
 };
 
-var FETCH_TOOL = {
+const FETCH_TOOL = {
     type: 'function',
     function: {
         name: 'fetch_page',
@@ -76,7 +115,9 @@ http.createServer((req, res) => {
             res.end('Empty body');
             return;
         }
-        handleRequest(body, res);
+        var size = body.length;
+        logDebug('USER → PROXY', 'POST ' + body.length + ' bytes');
+        handleRequest(body, req.headers, res);
     });
 }).listen(PROXY_PORT, function () {
     console.log('DeepSeek J2ME proxy running on http://localhost:' + PROXY_PORT);
@@ -89,7 +130,7 @@ function serverTimeContext() {
            ', year: ' + now.getFullYear() + ')';
 }
 
-function handleRequest(body, res) {
+function handleRequest(body, _headers, res) {
     var enableSearch = false;
     var maxRounds = DEFAULT_MAX_SEARCH_ROUNDS;
     var cleanBody = body;
@@ -100,13 +141,14 @@ function handleRequest(body, res) {
         if (hasSearch) {
             enableSearch = true;
             delete json.web_search;
+            logDebug('PROXY', 'web_search=on');
         }
         maxRounds = json.max_search_rounds || DEFAULT_MAX_SEARCH_ROUNDS;
         delete json.max_search_rounds;
 
         if (!enableSearch) {
             cleanBody = JSON.stringify(json);
-            console.log('No search, forwarding directly');
+            logDebug('PROXY', 'No search — forwarding directly to DeepSeek API');
             sendToDeepSeek(cleanBody, res);
             return;
         }
@@ -119,7 +161,7 @@ function handleRequest(body, res) {
                 userQuery = last.content.substring(0, 80);
             }
         }
-        console.log('Search mode (maxRounds=' + maxRounds + ') user: ' + userQuery);
+        logDebug('PROXY', 'web_search=on, maxRounds=' + maxRounds + ', query="' + userQuery + '"' );
 
         var ctx = '=== SYSTEM CONTEXT ===\n' +
             serverTimeContext() + '\n' +
@@ -149,15 +191,7 @@ function handleRequest(body, res) {
             '- Do not retry failed searches. Move on to known URLs instead.\n' +
             '- NEVER output JSON, tool_calls, or raw HTML in your answer. ' +
             'ALWAYS respond in plain natural language. ' +
-            'Extract the answer from the HTML, do not quote it.\n' +
-            '\n' +
-            '=== OUTPUT FORMAT (J2ME display constraint) ===\n' +
-            'Output plain text only. Do NOT use ANY Markdown formatting: ' +
-            'no **bold**, no `code`, no bullet lists with -, no > quotes, ' +
-            'no # headings, and especially NO PIPE TABLES with | and ---. ' +
-            'Instead, present structured data as labeled lines (title: value) ' +
-            'or flat paragraphs. Use plain numbered lists (1. 2. 3.) if needed. ' +
-            'Keep responses concise.';
+            'Extract the answer from the HTML, do not quote it.\n';
 
         messages.unshift({
             role: 'system',
@@ -177,7 +211,22 @@ function handleRequest(body, res) {
 
 function deepSearchLoop(json, res, round, maxRounds) {
     var roundLabel = round === 0 ? 'initial' : ('tool round ' + round);
+    logDebug('PROXY → MODEL', 'Round ' + round + '/' + maxRounds + ' — sending request to API');
     console.log('--- Deep search ' + roundLabel + ' ---');
+
+    // Warn the model one round before the limit so it doesn't embed
+    // DSML / tool_call XML in its response content. This avoids the
+    // "max rounds reached" follow-up request having to fix broken content.
+    if (round > 0 && round >= maxRounds - 1 && round < maxRounds) {
+        logDebug('PROXY', 'Penultimate round — injecting warning system message');
+        json.messages.push({
+            role: 'system',
+            content: 'You have ONE more research round remaining before the search limit. ' +
+                'Make this tool call count. In your NEXT response you must give your ' +
+                'final answer. Do NOT embed any tool call XML (<tool_calls>) in your ' +
+                'text content — only use the tool_calls property of the message object.'
+        });
+    }
 
     var body = JSON.stringify(json);
 
@@ -194,15 +243,13 @@ function deepSearchLoop(json, res, round, maxRounds) {
         try {
             parsed = JSON.parse(responseBody);
         } catch (e) {
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(responseBody);
+            sendJsonResponse(res, 200, responseBody);
             return;
         }
 
         var choices = parsed.choices;
         if (!choices || choices.length === 0) {
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(stripResponseMarkdown(responseBody));
+            sendJsonResponse(res, 200, responseBody);
             return;
         }
 
@@ -210,9 +257,12 @@ function deepSearchLoop(json, res, round, maxRounds) {
         var finishReason = choice.finish_reason;
         var message = choice.message;
 
+        logDebug('MODEL → PROXY', 'finish_reason=' + finishReason + '  round=' + round + '/' + maxRounds);
+
         if (finishReason === 'stop' || !message) {
             if (round === 0 && message && message.content && !message.tool_calls) {
-                console.log('Model refused tools on round 0, forcing tool use');
+                logDebug('MODEL', 'Refused tools on round 0 — forcing tool use');
+                if (message.content) message.content = cleanDsml(message.content);
                 json.messages.push(message);
                 json.messages.push({
                     role: 'system',
@@ -228,72 +278,58 @@ function deepSearchLoop(json, res, round, maxRounds) {
                         res.end(JSON.stringify({ error: { message: 'Proxy error: ' + err2.message } }));
                         return;
                     }
-                    res.writeHead(sc2, { 'Content-Type': 'application/json' });
-                    res.end(stripResponseMarkdown(rb2));
+                    sendJsonResponse(res, sc2, rb2);
                 });
                 return;
             }
             console.log('Deep search complete after ' + round + ' tool rounds');
-            console.log('--- /deep search ---');
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(stripResponseMarkdown(responseBody));
+            logDebug('PROXY → USER', 'Model answered (finish_reason=stop) after ' + round + ' rounds');
+            sendJsonResponse(res, 200, responseBody);
             return;
         }
 
         if (round >= maxRounds) {
             console.log('Max rounds reached (' + maxRounds + '), forcing final answer');
+            logDebug('PROXY', 'Max rounds reached — injecting force-summarise message');
 
-            if (finishReason === 'tool_calls' && message.tool_calls && message.tool_calls.length > 0) {
-                json.messages.push(message);
-                executeToolCalls(json, message.tool_calls, function () {
-                    delete json.tools;
-                    delete json.tool_choice;
-                    sendRequest(JSON.stringify(json), function (err2, sc2, rb2) {
-                        if (err2) {
-                            res.writeHead(502, { 'Content-Type': 'application/json' });
-                            res.end(JSON.stringify({ error: { message: 'Proxy error: ' + err2.message } }));
-                            return;
-                        }
-                        res.writeHead(sc2, { 'Content-Type': 'application/json' });
-                        res.end(stripResponseMarkdown(rb2));
-                    });
-                });
-                return;
-            }
-
-            if (message && message.content) {
-                json.messages.push(message);
-                delete json.tools;
-                delete json.tool_choice;
-                sendRequest(JSON.stringify(json), function (err2, sc2, rb2) {
-                    if (err2) {
-                        res.writeHead(502, { 'Content-Type': 'application/json' });
-                        res.end(JSON.stringify({ error: { message: 'Proxy error: ' + err2.message } }));
-                        return;
-                    }
-                    res.writeHead(sc2, { 'Content-Type': 'application/json' });
-                    res.end(stripResponseMarkdown(rb2));
-                });
-            } else {
-                res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(stripResponseMarkdown(responseBody));
-            }
+            // Don't execute more tool calls — tell the model to summarize
+            // what it already knows in a final answer.
+            json.messages.push({
+                role: 'system',
+                content: 'You have reached the maximum number of research rounds. ' +
+                    'Stop researching immediately and give your best final answer ' +
+                    'based on the information you have already gathered. ' +
+                    'Do NOT use any tools. Just answer.'
+            });
+            delete json.tools;
+            delete json.tool_choice;
+            sendRequest(JSON.stringify(json), function (err2, sc2, rb2) {
+                if (err2) {
+                    res.writeHead(502, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: { message: 'Proxy error: ' + err2.message } }));
+                    return;
+                }
+                sendJsonResponse(res, sc2, rb2);
+            });
             return;
         }
 
         if (finishReason !== 'tool_calls') {
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(stripResponseMarkdown(responseBody));
+            logDebug('MODEL → PROXY', 'Unexpected finish_reason "' + finishReason + '" — sending to client');
+            sendJsonResponse(res, 200, responseBody);
             return;
         }
 
         var toolCalls = message.tool_calls;
         if (!toolCalls || toolCalls.length === 0) {
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(stripResponseMarkdown(responseBody));
+            logDebug('MODEL → PROXY', 'finish_reason=tool_calls but no tool_calls array — sending to client');
+            sendJsonResponse(res, 200, responseBody);
             return;
         }
 
+        logDebug('MODEL → PROXY', 'Executing ' + toolCalls.length + ' tool call(s)');
+
+        if (message.content) message.content = cleanDsml(message.content);
         json.messages.push(message);
 
         executeToolCalls(json, toolCalls, function () {
@@ -334,6 +370,8 @@ function executeToolCalls(json, toolCalls, done) {
         try {
             parsedArgs = JSON.parse(tc.function.arguments || '{}');
         } catch (e) {}
+
+        logDebug('TOOL', name + '(' + JSON.stringify(parsedArgs).substring(0, 120) + ')');
 
         if (name === 'search_page') {
             handleSearchPage(parsedArgs, pos, tc);
@@ -559,46 +597,59 @@ function stripHtml(str) {
               .replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-function stripMarkdown(text) {
-    if (!text) return text;
-
-    text = text.replace(/^#{1,6}\s+/gm, '');
-
-    text = text.replace(/\*\*\*(.+?)\*\*\*/g, '$1');
-    text = text.replace(/\*\*(.+?)\*\*/g, '$1');
-    text = text.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '$1');
-
-    text = text.replace(/`{3}[\s\S]*?`{3}/g, function (m) {
-        return '\n' + m.replace(/`{3}\w*\n?/g, '').replace(/`{3}/g, '') + '\n';
-    });
-    text = text.replace(/`(.+?)`/g, '$1');
-
-    text = text.replace(/^[*-]\s+/gm, '\u2022 ');
-
-    text = text.replace(/^>\s?/gm, '| ');
-
-    text = text.replace(/\[(.+?)\]\(.+?\)/g, '$1');
-
-    text = text.replace(/^(\d+)\.\s+/gm, '$1. ');
-
-    text = text.replace(/\n{3,}/g, '\n\n');
-
-    return text.trim();
+function markdownToHtml(markdown) {
+    if (!markdown) return '';
+    var rawHtml = marked.parse(markdown);
+    // Safety net: strip tool_call XML tags that the model may embed
+    // in content even after system-prompt warnings. These look like
+    // <tool_calls>, <invoke name=...>, <parameter ...> etc. and will
+    // break LWUIT's HTML parser.
+    rawHtml = rawHtml.replace(/<tool_calls>[\s\S]*?<\/tool_calls>/gi, '');
+    rawHtml = rawHtml.replace(/<invoke[\s\S]*?<\/invoke>/gi, '');
+    rawHtml = rawHtml.replace(/<parameter[\s\S]*?\/>/gi, '');
+    rawHtml = rawHtml.replace(/<\/?tool_calls>/gi, '');
+    // LWUIT HTMLComponent supports most HTML4 tags + CSS2.1 selectors
+    // Remove only tags known to cause setBodyText to throw
+    rawHtml = rawHtml.replace(/<img[\s\S]*?>/gi, '');
+    rawHtml = rawHtml.replace(/<svg[\s\S]*?<\/svg>/gi, '');
+    rawHtml = rawHtml.replace(/<video[\s\S]*?<\/video>/gi, '');
+    rawHtml = rawHtml.replace(/<script[\s\S]*?<\/script>/gi, '');
+    rawHtml = rawHtml.replace(/<style[\s\S]*?<\/style>/gi, '');
+    return '<div style="padding:2px 6px; margin:2px 0">' + rawHtml + '</div>';
 }
 
-function stripResponseMarkdown(body) {
+function cleanDsml(str) {
+    if (!str) return '';
+    return str
+        .replace(/<\|+[\s\S]*?>/g, '')
+        .replace(/\|im_start\|\s*>/g, '')
+        .replace(/\|im_end\|\s*>/g, '')
+        .replace(/\|>\s*/g, '')
+        .replace(/<\|/g, '')
+        .trim();
+}
+
+
+function convertResponseToHtml(responseBody) {
     try {
-        var json = JSON.parse(body);
+        var json = JSON.parse(responseBody);
         var choices = json.choices;
         if (choices && choices.length > 0) {
             var msg = choices[0].message;
             if (msg && msg.content) {
-                msg.content = stripMarkdown(msg.content);
+                logDebug('CONTENT', 'before cleanDsml (first 500): ' + JSON.stringify(msg.content.substring(0, 500)));
+                msg.content = cleanDsml(msg.content);
+                logDebug('CONTENT', 'after cleanDsml (first 500): ' + JSON.stringify(msg.content.substring(0, 500)));
+                msg.content = markdownToHtml(msg.content);
             }
         }
-        return JSON.stringify(json);
+        var result = JSON.stringify(json);
+        logDebug('CONTENT', 'final JSON to client (first 300): ' + result.substring(0, 300));
+        return result;
     } catch (e) {
-        return body;
+        var err = JSON.stringify({ error: { message: 'Proxy: failed to convert response - ' + (e.message || e) } });
+        logDebug('CONTENT', 'convertResponseToHtml error: ' + e.message + ' fallback: ' + err);
+        return err;
     }
 }
 
@@ -639,15 +690,22 @@ function sendRequest(body, callback) {
 }
 
 function sendToDeepSeek(body, res) {
+    logDebug('PROXY → MODEL', 'Direct forward (no search)');
     sendRequest(body, function (err, statusCode, responseBody) {
         if (err) {
+            logDebug('MODEL → PROXY', 'API error: ' + err.message);
             res.writeHead(502, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: { message: 'Proxy error: ' + err.message } }));
             return;
         }
-
-        var clean = stripResponseMarkdown(responseBody);
-        res.writeHead(statusCode, { 'Content-Type': 'application/json' });
-        res.end(clean);
+        logDebug('MODEL → PROXY', 'API status=' + statusCode + '  body=' + responseBody.length + ' bytes');
+        sendJsonResponse(res, statusCode, responseBody);
     });
+}
+
+function sendJsonResponse(res, statusCode, responseBody) {
+    logDebug('PROXY → USER', 'HTTP ' + statusCode + '  ' + responseBody.length + ' bytes');
+    var htmlResponse = convertResponseToHtml(responseBody);
+    res.writeHead(statusCode, { 'Content-Type': 'application/json' });
+    res.end(htmlResponse);
 }

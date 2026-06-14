@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="DeepSeekChat" default="jar" basedir=".">
+    <description>Builds, tests, and runs the project DeepSeekChat.</description>
+    <property file="gradle.properties"/>
+    <property name="application.version" value="${MIDletVersion}"/>
+    <import file="nbproject/build-impl.xml"/>
+</project>
