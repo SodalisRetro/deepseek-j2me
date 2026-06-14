@@ -198,6 +198,20 @@ function deepSearchLoop(json, res, round, maxRounds) {
     var roundLabel = round === 0 ? 'initial' : ('tool round ' + round);
     console.log('--- Deep search ' + roundLabel + ' ---');
 
+    // Warn the model one round before the limit so it doesn't embed
+    // DSML / tool_call XML in its response content. This avoids the
+    // "max rounds reached" follow-up request having to fix broken content.
+    if (round > 0 && round >= maxRounds - 1 && round < maxRounds) {
+        console.log('Penultimate round (' + round + '), warning model to prepare final answer');
+        json.messages.push({
+            role: 'system',
+            content: 'You have ONE more research round remaining before the search limit. ' +
+                'Make this tool call count. In your NEXT response you must give your ' +
+                'final answer. Do NOT embed any tool call XML (<tool_calls>) in your ' +
+                'text content — only use the tool_calls property of the message object.'
+        });
+    }
+
     var body = JSON.stringify(json);
 
     sendRequest(body, function (err, statusCode, responseBody) {
@@ -561,6 +575,14 @@ function stripHtml(str) {
 function markdownToHtml(markdown) {
     if (!markdown) return '';
     var rawHtml = marked.parse(markdown);
+    // Safety net: strip tool_call XML tags that the model may embed
+    // in content even after system-prompt warnings. These look like
+    // <tool_calls>, <invoke name=...>, <parameter ...> etc. and will
+    // break LWUIT's HTML parser.
+    rawHtml = rawHtml.replace(/<tool_calls>[\s\S]*?<\/tool_calls>/gi, '');
+    rawHtml = rawHtml.replace(/<invoke[\s\S]*?<\/invoke>/gi, '');
+    rawHtml = rawHtml.replace(/<parameter[\s\S]*?\/>/gi, '');
+    rawHtml = rawHtml.replace(/<\/?tool_calls>/gi, '');
     // LWUIT HTMLComponent supports most HTML4 tags + CSS2.1 selectors
     // Remove only tags known to cause setBodyText to throw
     rawHtml = rawHtml.replace(/<img[\s\S]*?>/gi, '');
@@ -590,13 +612,19 @@ function convertResponseToHtml(responseBody) {
         if (choices && choices.length > 0) {
             var msg = choices[0].message;
             if (msg && msg.content) {
+                console.log('[DEBUG] content before cleanDsml:', JSON.stringify(msg.content.substring(0, 500)));
                 msg.content = cleanDsml(msg.content);
+                console.log('[DEBUG] content after cleanDsml:', JSON.stringify(msg.content.substring(0, 500)));
                 msg.content = markdownToHtml(msg.content);
             }
         }
-        return JSON.stringify(json);
+        var result = JSON.stringify(json);
+        console.log('[DEBUG] response sent to client (first 300):', result.substring(0, 300));
+        return result;
     } catch (e) {
-        return JSON.stringify({ error: { message: 'Proxy: failed to convert response - ' + (e.message || e) } });
+        var err = JSON.stringify({ error: { message: 'Proxy: failed to convert response - ' + (e.message || e) } });
+        console.log('[DEBUG] convertResponseToHtml error:', e.message, 'fallback:', err);
+        return err;
     }
 }
 
@@ -648,6 +676,7 @@ function sendToDeepSeek(body, res) {
 }
 
 function sendJsonResponse(res, statusCode, responseBody) {
+    console.log('[DEBUG] sendJsonResponse raw body (first 500):', responseBody.substring(0, 500));
     var htmlResponse = convertResponseToHtml(responseBody);
     res.writeHead(statusCode, { 'Content-Type': 'application/json' });
     res.end(htmlResponse);
