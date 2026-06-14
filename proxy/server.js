@@ -230,6 +230,7 @@ function deepSearchLoop(json, res, round, maxRounds) {
         if (finishReason === 'stop' || !message) {
             if (round === 0 && message && message.content && !message.tool_calls) {
                 console.log('Model refused tools on round 0, forcing tool use');
+                if (message.content) message.content = cleanDsml(message.content);
                 json.messages.push(message);
                 json.messages.push({
                     role: 'system',
@@ -291,6 +292,7 @@ function deepSearchLoop(json, res, round, maxRounds) {
             return;
         }
 
+        if (message.content) message.content = cleanDsml(message.content);
         json.messages.push(message);
 
         executeToolCalls(json, toolCalls, function () {
@@ -569,6 +571,17 @@ function markdownToHtml(markdown) {
     return '<div style="padding:2px 6px; margin:2px 0">' + rawHtml + '</div>';
 }
 
+function cleanDsml(str) {
+    if (!str) return '';
+    return str
+        .replace(/<\|+[\s\S]*?>/g, '')
+        .replace(/\|im_start\|\s*>/g, '')
+        .replace(/\|im_end\|\s*>/g, '')
+        .replace(/\|>\s*/g, '')
+        .replace(/<\|/g, '')
+        .trim();
+}
+
 
 function convertResponseToHtml(responseBody) {
     try {
@@ -577,22 +590,8 @@ function convertResponseToHtml(responseBody) {
         if (choices && choices.length > 0) {
             var msg = choices[0].message;
             if (msg && msg.content) {
-                // Strip ALL DSML constructs entirely before markdown conversion.
-                // DeepSeek emits markers like <|im_start|>, <|im_end|>,
-                // <|| DSML || tool_calls>, <|| DSML || invoke_name=...> etc.
-                // These use full angle-bracket syntax that LWUIT's HTML parser
-                // interprets as invalid HTML tags, causing it to stop rendering
-                // ALL subsequent content (and go blank on re-render).
-                // Key: we must remove the ENTIRE <|...> construct, including both
-                // angle brackets, before marked ever sees it.
-                var clean = msg.content
-                    .replace(/<\|+[\s\S]*?>/g, '')
-                    .replace(/\|im_start\|\s*>/g, '')
-                    .replace(/\|im_end\|\s*>/g, '')
-                    .replace(/\|>\s*/g, '')
-                    .replace(/<\|/g, '')
-                    .trim();
-                msg.content = markdownToHtml(clean);
+                msg.content = cleanDsml(msg.content);
+                msg.content = markdownToHtml(msg.content);
             }
         }
         return JSON.stringify(json);
