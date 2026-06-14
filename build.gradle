@@ -3,7 +3,7 @@ plugins {
 }
 
 group = 'io.github.sodalisretro'
-version = '0.1.0'
+version = MIDletVersion
 
 // ============================================================
 // WTK, MicroEmulator & LWUIT paths
