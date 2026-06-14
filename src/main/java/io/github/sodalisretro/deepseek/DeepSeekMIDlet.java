@@ -428,7 +428,7 @@ public class DeepSeekMIDlet extends MIDlet implements ActionListener, Runnable {
     public void run() {
         String response = null;
         try {
-            String requestBody = buildRequestBody(currentUserMessage);
+            String requestBody = buildRequestBody();
             response = httpClient.post(requestBody);
         } catch (IOException e) {
             String errMsg = e.getMessage();
@@ -601,17 +601,7 @@ public class DeepSeekMIDlet extends MIDlet implements ActionListener, Runnable {
         }
     }
 
-    private void addDirectly(String role, String text) {
-        while (chatContainer.getComponentCount() >= MAX_FORM_ITEMS) {
-            chatContainer.removeComponent(
-                chatContainer.getComponentAt(
-                    chatContainer.getComponentCount() - 1));
-        }
-        chatContainer.addComponent(0, createMessageLabel(
-            "\n" + role + " [" + nowTime() + "]:\n" + text));
-    }
-
-    private String buildRequestBody(String userMessage) {
+    private String buildRequestBody() {
         StringBuffer sb = new StringBuffer();
         sb.append("{\"model\":\"deepseek-chat\",\"messages\":[");
 
@@ -623,10 +613,6 @@ public class DeepSeekMIDlet extends MIDlet implements ActionListener, Runnable {
             sb.append(",");
             sb.append((String) messages.elementAt(i));
         }
-
-        sb.append(",{\"role\":\"user\",\"content\":\"");
-        sb.append(escapeJson(userMessage));
-        sb.append("\"}");
 
         sb.append("],\"stream\":false");
 
@@ -647,6 +633,9 @@ public class DeepSeekMIDlet extends MIDlet implements ActionListener, Runnable {
         sb.append(escapeJson(content));
         sb.append("\"}");
         messages.addElement(sb.toString());
+        while (messages.size() > MAX_HISTORY) {
+            messages.removeElementAt(0);
+        }
     }
 
     private String escapeJson(String text) {
