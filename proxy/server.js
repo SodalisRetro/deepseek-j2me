@@ -116,7 +116,7 @@ function serverTimeContext() {
            ', year: ' + now.getFullYear() + ')';
 }
 
-function handleRequest(body, headers, res) {
+function handleRequest(body, _headers, res) {
     var enableSearch = false;
     var maxRounds = DEFAULT_MAX_SEARCH_ROUNDS;
     var cleanBody = body;

@@ -230,14 +230,16 @@ public class DeepSeekMIDlet extends MIDlet implements ActionListener, Runnable {
             String text = promptArea.getText();
             systemPrompt = text;
             Settings.saveSystemPrompt(text);
+            promptDialog.dispose();
 
         } else if (cmd == promptResetCommand) {
             systemPrompt = I18n.get(I18n.SYSTEM_PROMPT);
             Settings.saveSystemPrompt("");
             promptArea.setText(systemPrompt);
+            promptDialog.dispose();
 
         } else if (cmd == promptBackCommand) {
-            promptArea.setText(systemPrompt);
+            promptDialog.dispose();
 
         } else if (cmd == saveCommand) {
             String host = hostField.getText().trim();
@@ -338,8 +340,10 @@ public class DeepSeekMIDlet extends MIDlet implements ActionListener, Runnable {
                         System.currentTimeMillis() - thinkingStartTime);
                     Display.getInstance().callSerially(new Runnable() {
                         public void run() {
-                            chatForm.setTitle(
-                                I18n.get(I18n.TITLE_THINKING) + " " + elapsed);
+                            if (thinking) {
+                                chatForm.setTitle(
+                                    I18n.get(I18n.TITLE_THINKING) + " " + elapsed);
+                            }
                         }
                     });
                     try {
