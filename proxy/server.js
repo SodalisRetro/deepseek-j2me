@@ -18,7 +18,12 @@ marked.use({
     hr: function() { return '<br/>\n'; },
     image: function() { return ''; },
     link: function(token) {
-        return '<a style="color:#4488ff;" href="' + token.href + '">' + token.text + '</a> <font color="#666666">(' + token.href + ')</font>';
+        var href = (token.href || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        var text = (token.text || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        if (href.indexOf('http://') !== 0 && href.indexOf('https://') !== 0) {
+            return text;
+        }
+        return '<a style="color:#4488ff;" href="' + href + '">' + text + '</a> <font color="#666666">(' + href + ')</font>';
       }
   }
 });
@@ -208,13 +213,13 @@ function deepSearchLoop(json, res, round, maxRounds) {
         try {
             parsed = JSON.parse(responseBody);
         } catch (e) {
-            writeHtml(res, 200, responseBody);
+            sendJsonResponse(res, 200, responseBody);
             return;
         }
 
         var choices = parsed.choices;
         if (!choices || choices.length === 0) {
-            writeHtml(res, 200, responseBody);
+            sendJsonResponse(res, 200, responseBody);
             return;
         }
 
@@ -240,13 +245,13 @@ function deepSearchLoop(json, res, round, maxRounds) {
                         res.end(JSON.stringify({ error: { message: 'Proxy error: ' + err2.message } }));
                         return;
                     }
-                    writeHtml(res, sc2, rb2);
+                    sendJsonResponse(res, sc2, rb2);
                 });
                 return;
             }
             console.log('Deep search complete after ' + round + ' tool rounds');
             console.log('--- /deep search ---');
-            writeHtml(res, 200, responseBody);
+            sendJsonResponse(res, 200, responseBody);
             return;
         }
 
@@ -270,19 +275,19 @@ function deepSearchLoop(json, res, round, maxRounds) {
                     res.end(JSON.stringify({ error: { message: 'Proxy error: ' + err2.message } }));
                     return;
                 }
-                writeHtml(res, sc2, rb2);
+                sendJsonResponse(res, sc2, rb2);
             });
             return;
         }
 
         if (finishReason !== 'tool_calls') {
-            writeHtml(res, 200, responseBody);
+            sendJsonResponse(res, 200, responseBody);
             return;
         }
 
         var toolCalls = message.tool_calls;
         if (!toolCalls || toolCalls.length === 0) {
-            writeHtml(res, 200, responseBody);
+            sendJsonResponse(res, 200, responseBody);
             return;
         }
 
@@ -556,6 +561,7 @@ function markdownToHtml(markdown) {
     var rawHtml = marked.parse(markdown);
     // LWUIT HTMLComponent supports most HTML4 tags + CSS2.1 selectors
     // Remove only tags known to cause setBodyText to throw
+    rawHtml = rawHtml.replace(/<img[\s\S]*?>/gi, '');
     rawHtml = rawHtml.replace(/<svg[\s\S]*?<\/svg>/gi, '');
     rawHtml = rawHtml.replace(/<video[\s\S]*?<\/video>/gi, '');
     rawHtml = rawHtml.replace(/<script[\s\S]*?<\/script>/gi, '');
@@ -638,11 +644,11 @@ function sendToDeepSeek(body, res) {
             res.end(JSON.stringify({ error: { message: 'Proxy error: ' + err.message } }));
             return;
         }
-        writeHtml(res, statusCode, responseBody);
+        sendJsonResponse(res, statusCode, responseBody);
     });
 }
 
-function writeHtml(res, statusCode, responseBody) {
+function sendJsonResponse(res, statusCode, responseBody) {
     var htmlResponse = convertResponseToHtml(responseBody);
     res.writeHead(statusCode, { 'Content-Type': 'application/json' });
     res.end(htmlResponse);

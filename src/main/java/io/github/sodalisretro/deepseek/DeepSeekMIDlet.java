@@ -60,8 +60,8 @@ public class DeepSeekMIDlet extends MIDlet implements ActionListener, Runnable {
     private int maxSearchRounds;
     private String systemPrompt;
     private int selectedMessageIndex;
-    private long thinkingStartTime;
-    private boolean thinking;
+    private volatile long thinkingStartTime;
+    private volatile boolean thinking;
     private static final int MAX_HISTORY = 10;
     private static final int MAX_FORM_ITEMS = 30;
     private static final int MAX_INPUT_HISTORY = 20;
