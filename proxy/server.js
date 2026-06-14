@@ -597,7 +597,7 @@ function convertResponseToHtml(responseBody) {
         }
         return JSON.stringify(json);
     } catch (e) {
-        return responseBody;
+        return JSON.stringify({ error: { message: 'Proxy: failed to convert response - ' + (e.message || e) } });
     }
 }
 

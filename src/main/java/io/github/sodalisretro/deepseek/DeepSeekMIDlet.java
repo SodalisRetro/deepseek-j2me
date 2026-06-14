@@ -257,8 +257,8 @@ public class DeepSeekMIDlet extends MIDlet implements ActionListener, Runnable {
                     maxSearchRounds = rounds;
                     Settings.saveMaxSearchRounds(rounds);
                 }
+                chatForm.show();
             }
-            chatForm.show();
 
         } else if (cmd == settingsBackCommand) {
             hostField.setText(Settings.getHost());
@@ -350,6 +350,24 @@ public class DeepSeekMIDlet extends MIDlet implements ActionListener, Runnable {
                 }
             }
         }.start();
+    }
+
+    private String stripHtml(String html) {
+        if (html == null) return "";
+        StringBuffer sb = new StringBuffer();
+        int len = html.length();
+        boolean inTag = false;
+        for (int i = 0; i < len; i++) {
+            char c = html.charAt(i);
+            if (c == '<') {
+                inTag = true;
+            } else if (c == '>') {
+                inTag = false;
+            } else if (!inTag) {
+                sb.append(c);
+            }
+        }
+        return sb.toString().trim();
     }
 
     private String formatElapsed(long ms) {
@@ -459,7 +477,7 @@ public class DeepSeekMIDlet extends MIDlet implements ActionListener, Runnable {
                                 String content = (String) ((Hashtable) message).get("content");
                                 if (content != null) {
                                     appendHtmlChat("DeepSeek", content);
-                                    addHistoryMessage("assistant", content);
+                                    addHistoryMessage("assistant", stripHtml(content));
                                     chatForm.setTitle(I18n.get(I18n.TITLE_IDLE));
                                     return;
                                 }
