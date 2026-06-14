@@ -30,7 +30,19 @@ marked.use({
 
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || '';
 const PROXY_PORT = parseInt(process.env.PROXY_PORT || '8080', 10);
+const DEBUG = process.env.DEBUG_PROXY === 'true' || process.argv.indexOf('--debug') !== -1;
 const DEFAULT_MAX_SEARCH_ROUNDS = 15;
+
+function logDebug(tag, msg) {
+    if (!DEBUG) return;
+    var ts = new Date().toISOString().substring(11, 23);
+    console.log('[' + ts + '] [' + padTag(tag) + '] ' + msg);
+}
+
+function padTag(tag) {
+    while (tag.length < 18) tag += ' ';
+    return tag;
+}
 
 const SEARCH_TOOL = {
     type: 'function',
@@ -103,6 +115,8 @@ http.createServer((req, res) => {
             res.end('Empty body');
             return;
         }
+        var size = body.length;
+        logDebug('USER → PROXY', 'POST ' + body.length + ' bytes');
         handleRequest(body, req.headers, res);
     });
 }).listen(PROXY_PORT, function () {
@@ -127,13 +141,14 @@ function handleRequest(body, _headers, res) {
         if (hasSearch) {
             enableSearch = true;
             delete json.web_search;
+            logDebug('PROXY', 'web_search=on');
         }
         maxRounds = json.max_search_rounds || DEFAULT_MAX_SEARCH_ROUNDS;
         delete json.max_search_rounds;
 
         if (!enableSearch) {
             cleanBody = JSON.stringify(json);
-            console.log('No search, forwarding directly');
+            logDebug('PROXY', 'No search — forwarding directly to DeepSeek API');
             sendToDeepSeek(cleanBody, res);
             return;
         }
@@ -146,7 +161,7 @@ function handleRequest(body, _headers, res) {
                 userQuery = last.content.substring(0, 80);
             }
         }
-        console.log('Search mode (maxRounds=' + maxRounds + ') user: ' + userQuery);
+        logDebug('PROXY', 'web_search=on, maxRounds=' + maxRounds + ', query="' + userQuery + '"' );
 
         var ctx = '=== SYSTEM CONTEXT ===\n' +
             serverTimeContext() + '\n' +
@@ -196,13 +211,14 @@ function handleRequest(body, _headers, res) {
 
 function deepSearchLoop(json, res, round, maxRounds) {
     var roundLabel = round === 0 ? 'initial' : ('tool round ' + round);
+    logDebug('PROXY → MODEL', 'Round ' + round + '/' + maxRounds + ' — sending request to API');
     console.log('--- Deep search ' + roundLabel + ' ---');
 
     // Warn the model one round before the limit so it doesn't embed
     // DSML / tool_call XML in its response content. This avoids the
     // "max rounds reached" follow-up request having to fix broken content.
     if (round > 0 && round >= maxRounds - 1 && round < maxRounds) {
-        console.log('Penultimate round (' + round + '), warning model to prepare final answer');
+        logDebug('PROXY', 'Penultimate round — injecting warning system message');
         json.messages.push({
             role: 'system',
             content: 'You have ONE more research round remaining before the search limit. ' +
@@ -241,9 +257,11 @@ function deepSearchLoop(json, res, round, maxRounds) {
         var finishReason = choice.finish_reason;
         var message = choice.message;
 
+        logDebug('MODEL → PROXY', 'finish_reason=' + finishReason + '  round=' + round + '/' + maxRounds);
+
         if (finishReason === 'stop' || !message) {
             if (round === 0 && message && message.content && !message.tool_calls) {
-                console.log('Model refused tools on round 0, forcing tool use');
+                logDebug('MODEL', 'Refused tools on round 0 — forcing tool use');
                 if (message.content) message.content = cleanDsml(message.content);
                 json.messages.push(message);
                 json.messages.push({
@@ -265,13 +283,14 @@ function deepSearchLoop(json, res, round, maxRounds) {
                 return;
             }
             console.log('Deep search complete after ' + round + ' tool rounds');
-            console.log('--- /deep search ---');
+            logDebug('PROXY → USER', 'Model answered (finish_reason=stop) after ' + round + ' rounds');
             sendJsonResponse(res, 200, responseBody);
             return;
         }
 
         if (round >= maxRounds) {
             console.log('Max rounds reached (' + maxRounds + '), forcing final answer');
+            logDebug('PROXY', 'Max rounds reached — injecting force-summarise message');
 
             // Don't execute more tool calls — tell the model to summarize
             // what it already knows in a final answer.
@@ -296,15 +315,19 @@ function deepSearchLoop(json, res, round, maxRounds) {
         }
 
         if (finishReason !== 'tool_calls') {
+            logDebug('MODEL → PROXY', 'Unexpected finish_reason "' + finishReason + '" — sending to client');
             sendJsonResponse(res, 200, responseBody);
             return;
         }
 
         var toolCalls = message.tool_calls;
         if (!toolCalls || toolCalls.length === 0) {
+            logDebug('MODEL → PROXY', 'finish_reason=tool_calls but no tool_calls array — sending to client');
             sendJsonResponse(res, 200, responseBody);
             return;
         }
+
+        logDebug('MODEL → PROXY', 'Executing ' + toolCalls.length + ' tool call(s)');
 
         if (message.content) message.content = cleanDsml(message.content);
         json.messages.push(message);
@@ -347,6 +370,8 @@ function executeToolCalls(json, toolCalls, done) {
         try {
             parsedArgs = JSON.parse(tc.function.arguments || '{}');
         } catch (e) {}
+
+        logDebug('TOOL', name + '(' + JSON.stringify(parsedArgs).substring(0, 120) + ')');
 
         if (name === 'search_page') {
             handleSearchPage(parsedArgs, pos, tc);
@@ -612,18 +637,18 @@ function convertResponseToHtml(responseBody) {
         if (choices && choices.length > 0) {
             var msg = choices[0].message;
             if (msg && msg.content) {
-                console.log('[DEBUG] content before cleanDsml:', JSON.stringify(msg.content.substring(0, 500)));
+                logDebug('CONTENT', 'before cleanDsml (first 500): ' + JSON.stringify(msg.content.substring(0, 500)));
                 msg.content = cleanDsml(msg.content);
-                console.log('[DEBUG] content after cleanDsml:', JSON.stringify(msg.content.substring(0, 500)));
+                logDebug('CONTENT', 'after cleanDsml (first 500): ' + JSON.stringify(msg.content.substring(0, 500)));
                 msg.content = markdownToHtml(msg.content);
             }
         }
         var result = JSON.stringify(json);
-        console.log('[DEBUG] response sent to client (first 300):', result.substring(0, 300));
+        logDebug('CONTENT', 'final JSON to client (first 300): ' + result.substring(0, 300));
         return result;
     } catch (e) {
         var err = JSON.stringify({ error: { message: 'Proxy: failed to convert response - ' + (e.message || e) } });
-        console.log('[DEBUG] convertResponseToHtml error:', e.message, 'fallback:', err);
+        logDebug('CONTENT', 'convertResponseToHtml error: ' + e.message + ' fallback: ' + err);
         return err;
     }
 }
@@ -665,18 +690,21 @@ function sendRequest(body, callback) {
 }
 
 function sendToDeepSeek(body, res) {
+    logDebug('PROXY → MODEL', 'Direct forward (no search)');
     sendRequest(body, function (err, statusCode, responseBody) {
         if (err) {
+            logDebug('MODEL → PROXY', 'API error: ' + err.message);
             res.writeHead(502, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: { message: 'Proxy error: ' + err.message } }));
             return;
         }
+        logDebug('MODEL → PROXY', 'API status=' + statusCode + '  body=' + responseBody.length + ' bytes');
         sendJsonResponse(res, statusCode, responseBody);
     });
 }
 
 function sendJsonResponse(res, statusCode, responseBody) {
-    console.log('[DEBUG] sendJsonResponse raw body (first 500):', responseBody.substring(0, 500));
+    logDebug('PROXY → USER', 'HTTP ' + statusCode + '  ' + responseBody.length + ' bytes');
     var htmlResponse = convertResponseToHtml(responseBody);
     res.writeHead(statusCode, { 'Content-Type': 'application/json' });
     res.end(htmlResponse);
