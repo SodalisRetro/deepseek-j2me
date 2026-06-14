@@ -89,10 +89,16 @@ tasks.register('prepareJarClasses') {
     }
 }
 
-jar {
+// ============================================================
+// Fat jar — preverified + embedded LWUIT/MIDP_IO (not shrunk)
+// ============================================================
+tasks.register('fatJar', Jar) {
     dependsOn prepareJarClasses
-    description = 'Build MIDlet jar from preverified classes'
+    description = 'Build fat jar with embedded LWUIT (not shrunk)'
 
+    archiveClassifier = 'fat'
+
+    from sourceSets.main.output.classesDirs
     from zipTree(lwuitJar)
     from zipTree(midpIoJar)
     eachFile { FileCopyDetails fcp ->
@@ -115,12 +121,57 @@ jar {
 }
 
 // ============================================================
-// Generate JAD descriptor (runs after jar)
+// ProGuard — shrink/obfuscate the fat jar for production.
+// Output replaces the default jar (no classifier) so that
+// `gradlew jar` gives the production-ready artifact.
+// ============================================================
+def proguardJar = file("${buildDir}/libs/${project.name}-${version}.jar")
+
+tasks.register('proguard') {
+    dependsOn fatJar
+    description = 'Shrink jar with ProGuard (removes unused LWUIT classes)'
+
+    doLast {
+        def fat = fatJar.archiveFile.get().asFile
+
+        delete proguardJar
+
+        exec {
+            executable = 'java'
+            args = [
+                    '-jar', "$wtkHome/lib/proguard-4.4.jar",
+                    '-injars',  fat.absolutePath,
+                    '-outjars', proguardJar.absolutePath,
+                    '-libraryjars', "${wtkHome}/lib/cldcapi11.jar",
+                    '-libraryjars', "${wtkHome}/lib/midpapi20.jar",
+                    '-dontwarn',
+                    '-ignorewarnings',
+                    '-dontusemixedcaseclassnames',
+                    '-dontpreverify',
+                    '-dontoptimize',
+                    '-keep', 'public class io.github.sodalisretro.deepseek.DeepSeekMIDlet',
+                    '-keep', 'public class * extends javax.microedition.midlet.MIDlet',
+                    '-keepclassmembers', 'public class * extends javax.microedition.midlet.MIDlet { *; }'
+            ]
+        }
+    }
+}
+
+// Make `gradlew jar` produce the ProGuard-shrunk jar
+jar {
+    dependsOn proguard
+    description = 'Build production jar (preverified + ProGuard-shrunk)'
+    // Disable the built-in jar actions — output is created by ProGuard
+    onlyIf { false }
+}
+
+// ============================================================
+// Generate JAD descriptor (runs after proguard)
 // ============================================================
 tasks.register('generateJad') {
-    dependsOn jar
+    dependsOn proguard
     doLast {
-        def jarFile = jar.archiveFile.get().asFile
+        def jarFile = proguardJar
         def jadFile = new File(jarFile.parentFile, jarFile.name.replace('.jar', '.jad'))
         def jadProperties = [
                 'MIDlet-Name'                : MIDletName,
@@ -142,7 +193,7 @@ tasks.register('generateJad') {
 // Run in MicroEmulator (preverified jar)
 // ============================================================
 tasks.register('runEmulator') {
-    dependsOn jar
+    dependsOn proguard
     doLast {
         javaexec {
             mainClass = 'org.microemu.app.Main'
@@ -157,7 +208,7 @@ tasks.register('runEmulator') {
                     midpIoJar
             )
             jvmArgs '-Dsun.java2d.d3d=false'
-            args = [jar.archiveFile.get().asFile.absolutePath]
+            args = [proguardJar.absolutePath]
         }
     }
 }
